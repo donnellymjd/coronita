@@ -1,6 +1,67 @@
 import pandas as pd
 import numpy as np
 
+# From Roger Allen https://gist.github.com/rogerallen/1583593
+us_state_abbrev = {
+    'Alabama': 'AL',
+    'Alaska': 'AK',
+    'American Samoa': 'AS',
+    'Arizona': 'AZ',
+    'Arkansas': 'AR',
+    'California': 'CA',
+    'Colorado': 'CO',
+    'Connecticut': 'CT',
+    'Delaware': 'DE',
+    'District of Columbia': 'DC',
+    'Florida': 'FL',
+    'Georgia': 'GA',
+    'Guam': 'GU',
+    'Hawaii': 'HI',
+    'Idaho': 'ID',
+    'Illinois': 'IL',
+    'Indiana': 'IN',
+    'Iowa': 'IA',
+    'Kansas': 'KS',
+    'Kentucky': 'KY',
+    'Louisiana': 'LA',
+    'Maine': 'ME',
+    'Maryland': 'MD',
+    'Massachusetts': 'MA',
+    'Michigan': 'MI',
+    'Minnesota': 'MN',
+    'Mississippi': 'MS',
+    'Missouri': 'MO',
+    'Montana': 'MT',
+    'Nebraska': 'NE',
+    'Nevada': 'NV',
+    'New Hampshire': 'NH',
+    'New Jersey': 'NJ',
+    'New Mexico': 'NM',
+    'New York': 'NY',
+    'North Carolina': 'NC',
+    'North Dakota': 'ND',
+    'Northern Mariana Islands':'MP',
+    'Ohio': 'OH',
+    'Oklahoma': 'OK',
+    'Oregon': 'OR',
+    'Pennsylvania': 'PA',
+    'Puerto Rico': 'PR',
+    'Rhode Island': 'RI',
+    'South Carolina': 'SC',
+    'South Dakota': 'SD',
+    'Tennessee': 'TN',
+    'Texas': 'TX',
+    'Utah': 'UT',
+    'Vermont': 'VT',
+    'Virgin Islands': 'VI',
+    'Virginia': 'VA',
+    'Washington': 'WA',
+    'West Virginia': 'WV',
+    'Wisconsin': 'WI',
+    'Wyoming': 'WY'
+}
+abbrev_us_state = dict(map(reversed, us_state_abbrev.items()))
+
 def get_nys_region(): 
     gsheet_nys = 'https://docs.google.com/spreadsheets/d/1yidLf5CUEsdFpaYSF5is_KSJ5M5Okm4p3c7eduBkM8s/export?format=csv&gid=1928535373'
     df_nys_region_raw = pd.read_csv(gsheet_nys, skiprows=2)
@@ -85,4 +146,5 @@ def get_census_pop():
     df_census = df_census.rename(columns={'STNAME':'state','POPESTIMATE2019':'pop2019'})
     df_census['pop2019'] = pd.to_numeric(df_census.pop2019)
     df_census = df_census[['state','county','fips','SUMLEV', 'REGION','DIVISION', 'pop2019']]
+    df_census['state'] = df_census['state'].replace(us_state_abbrev)
     return df_census
