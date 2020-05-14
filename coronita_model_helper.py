@@ -14,6 +14,7 @@ def daily_cohort_model(cohort_strt, d_to_fore, covid_params, E_0, I_0=0):
     ICU = [0]
     R = [0]
     D = [0]
+    H_inflow = [0]
 
     for t_ in t[:-1]:
 
@@ -88,8 +89,9 @@ def daily_cohort_model(cohort_strt, d_to_fore, covid_params, E_0, I_0=0):
         R.append(R[-1] + dR)
         H.append(H[-1] + dH)
         D.append(D[-1] + dD)
-    df_out = pd.DataFrame(np.stack([E, I, R, H, D]).T,
-                          columns=['exposed', 'infectious', 'recovered', 'hospitalized', 'deaths'],
+        H_inflow.append(d_hosp_admits)
+    df_out = pd.DataFrame(np.stack([E, I, R, H, D, H_inflow]).T,
+                          columns=['exposed', 'infectious', 'recovered', 'hospitalized', 'deaths', 'hosp_admits'],
                           index=pd.date_range(cohort_strt,
                                               cohort_strt + pd.Timedelta(days=d_to_fore - 1)))
     df_out['icu'] = df_out['hospitalized'].mul(covid_params['icu_rt'])
@@ -185,33 +187,50 @@ def seir_model_cohort(start_dt, model_dict, exposed_0=100, infectious_0=100):
         start_dt + pd.Timedelta(days=model_dict['d_to_forecast'] - 1)))
 
     df_agg['susceptible'] = pd.Series(s_suspop)
+    exposed_daily = df_all_cohorts.stack().unstack(['metric'])[['exposed']].reset_index()
+    df_agg['exposed_daily'] = exposed_daily[(exposed_daily.dt == exposed_daily.cohort_dt)].set_index(['dt'])['exposed']
 
     return df_agg.dropna(), df_all_cohorts
 
-def model_find_start(start_dt, model_dict, exposed_0=100, infectious_0=100):
+def model_find_start(this_guess, model_dict, exposed_0=None, infectious_0=None):
     from sklearn.metrics import mean_squared_error
 
-    this_guess = pd.Timestamp(start_dt)
     last_guess = this_guess
     rmses = pd.Series(dtype='float64')
     change_in_error = -1
 
+    if exposed_0 == None:
+        exposed_0 = min(model_dict['df_hist']['cases_tot'].max() / 100, 100)
+    if infectious_0 == None:
+        infectious_0 = min(model_dict['df_hist']['cases_tot'].max() / 100, 100)
+
+
     while change_in_error < 0:
+        # print(this_guess)
         df_agg, df_all_cohorts = seir_model_cohort(this_guess, model_dict, exposed_0, infectious_0)
-        true_hosps = model_dict['df_hist']['hosp_concur'].dropna()
-        pred_hosps = df_agg['hospitalized'].loc[true_hosps.index]
-        rmses.loc[this_guess] = np.sqrt(mean_squared_error(true_hosps, pred_hosps))
+
+        if 'hosp_concur' in model_dict['df_hist'].columns:
+            obs_metric = model_dict['df_hist']['hosp_concur'].dropna()
+            # print(obs_metric.index)
+            pred_metric = df_agg['hospitalized'].loc[obs_metric.index]
+        elif 'deaths_daily' in model_dict['df_hist'].columns:
+            obs_metric = model_dict['df_hist']['deaths_daily'].dropna()
+            pred_metric = df_agg['deaths'].diff().loc[obs_metric.index]
+
+        rmses.loc[this_guess] = np.sqrt(mean_squared_error(obs_metric, pred_metric))
+        # print(rmses.loc[this_guess])
 
         if last_guess != this_guess:
             change_in_error = rmses.loc[this_guess] - rmses.loc[last_guess]
 
         last_guess = this_guess
-        if true_hosps.sub(pred_hosps).mean() < 0:
+        if obs_metric.sub(pred_metric).mean() < 0:
             this_guess = this_guess + pd.Timedelta(days=1)
         else:
             this_guess = this_guess - pd.Timedelta(days=1)
 
     df_agg, df_all_cohorts = seir_model_cohort(rmses.idxmin(), model_dict, exposed_0, infectious_0)
+    print('Best starting date: ',rmses.idxmin())
     return df_agg, df_all_cohorts
 
 def est_rt(df_input, lookback, d_infect, offset_days):
@@ -270,6 +289,14 @@ def est_all_rts(model_dict):
             (model_dict['covid_params']['d_incub']
             ))
 
+    ## Drop estimates with very high standard deviations ##
+    five_stds = df_rts.std().median() * 5
+    col_stds = df_rts.std()
+    df_rts = df_rts.drop(columns=col_stds[col_stds > five_stds].index)
+
+    daysatzero = df_rts[df_rts == 0].count()
+    df_rts = df_rts.drop(columns=daysatzero[daysatzero > 3].index)
+
     primary_rts = ['rt_deaths_daily', 'rt_hosp_concur', 'rt_hosp_admits']
     avail_prim_rts = [col for col in df_rts.columns if col in primary_rts]
     df_rts['rt_primary_mean'] = df_rts[avail_prim_rts].mean(axis=1).rolling(7,
@@ -277,16 +304,28 @@ def est_all_rts(model_dict):
         min_periods=3,
         center=True).mean(std=2)
 
-    secondary_rt = 'rt_pos_test_share_daily' if 'rt_pos_test_share_daily' in df_rts.columns else 'rt_cases_daily'
-    secondary_index = pd.Series(1.0,
-                                index=pd.date_range(df_rts['rt_primary_mean'].last_valid_index(),
-                                                    df_rts[secondary_rt].last_valid_index()))
-    secondary_index = secondary_index.add(df_rts[secondary_rt].loc[secondary_index.index].pct_change(),
-                                          fill_value=0)
-    secondary_index = secondary_index.cumprod()
-    df_rts['rt_secondary_est'] = secondary_index.mul(df_rts['rt_primary_mean'].dropna().iloc[-1])
+    # secondary_rt = 'rt_pos_test_share_daily' if 'rt_pos_test_share_daily' in df_rts.columns else 'rt_cases_daily'
+    # secondary_index = pd.Series(1.0,
+    #                             index=pd.date_range(df_rts['rt_primary_mean'].last_valid_index(),
+    #                                                 df_rts[secondary_rt].last_valid_index()))
+    # secondary_index = secondary_index.add(df_rts[secondary_rt].loc[secondary_index.index].pct_change(),
+    #                                       fill_value=0)
+    # secondary_index = secondary_index.cumprod()
+    # df_rts['rt_secondary_est'] = secondary_index.mul(df_rts['rt_primary_mean'].dropna().iloc[-1])
 
-    df_rts['rt_joint_est'] = df_rts['rt_primary_mean'].fillna(df_rts['rt_secondary_est'])
+    secondary_rts = ['rt_pos_test_share_daily', 'rt_cases_daily']
+    avail_sec_rts = [col for col in df_rts.columns if col in secondary_rts]
+    df_rts['rt_secondary_est'] = df_rts[avail_sec_rts].mean(axis=1).rolling(7,
+        win_type='gaussian',
+        min_periods=3,
+        center=True).mean(std=2)
+
+    df_rts['rt_joint_est'] = df_rts['rt_primary_mean'].fillna(df_rts['rt_secondary_est']).rolling(7,
+        win_type='gaussian',
+        min_periods=3,
+        center=True).mean(std=2)
+
+    df_rts['rt_joint_est'] = df_rts['rt_joint_est'].loc[df_rts['rt_joint_est'].idxmax():]
 
     return df_rts
 
@@ -319,7 +358,42 @@ def make_model_dict_state(state_code, abbrev_us_state, df_census, df_st_testing_
 
     model_dict['df_rts'] = est_all_rts(model_dict)
 
-    model_dict['covid_params']['basic_r0'] = model_dict['df_rts']['rt_joint_est'].iloc[0]
+    model_dict['covid_params']['basic_r0'] = model_dict['df_rts']['rt_joint_est'].dropna().iloc[0]
+
+    model_dict['d_to_forecast'] = int(d_to_forecast)
+
+    return model_dict
+
+def make_model_dict_state(state_code, abbrev_us_state, df_census, df_st_testing_fmt, covid_params, d_to_forecast = 75):
+    model_dict = {}
+
+    model_dict['region_code'] = state_code
+    model_dict['region_name'] = abbrev_us_state[model_dict['region_code']]
+    model_dict['tot_pop'] = df_census.loc[(df_census.SUMLEV == 40)
+                                                  & (df_census.state == model_dict['region_code']),
+                                                  'pop2019'].values[0]
+
+    model_dict['df_hist'] = pd.DataFrame()
+
+    if df_st_testing_fmt['deaths'][model_dict['region_code']].dropna().shape[0] > 14:
+        model_dict['df_hist']['deaths_tot'] = df_st_testing_fmt['deaths'][model_dict['region_code']]
+        model_dict['df_hist']['deaths_daily'] = model_dict['df_hist']['deaths_tot'].diff()
+
+    if df_st_testing_fmt['hospitalizedCurrently'][model_dict['region_code']].dropna().shape[0] > 14:
+        model_dict['df_hist']['hosp_concur'] = df_st_testing_fmt['hospitalizedCurrently'][model_dict['region_code']]
+
+    if df_st_testing_fmt['hospitalizedIncrease'][model_dict['region_code']].dropna().shape[0] > 14:
+        model_dict['df_hist']['hosp_admits'] = df_st_testing_fmt['hospitalizedIncrease'][model_dict['region_code']]
+    model_dict['df_hist']['cases_tot'] = df_st_testing_fmt['cases'][model_dict['region_code']]
+    model_dict['df_hist']['cases_daily'] = model_dict['df_hist']['cases_tot'].diff()
+    model_dict['df_hist']['pos_neg_tests_tot'] = df_st_testing_fmt['posNeg'][model_dict['region_code']]
+    model_dict['df_hist']['pos_neg_tests_daily'] = model_dict['df_hist']['pos_neg_tests_tot'].diff()
+
+    model_dict['covid_params'] = covid_params
+
+    model_dict['df_rts'] = est_all_rts(model_dict)
+
+    model_dict['covid_params']['basic_r0'] = model_dict['df_rts']['rt_joint_est'].dropna().iloc[0]
 
     model_dict['d_to_forecast'] = int(d_to_forecast)
 

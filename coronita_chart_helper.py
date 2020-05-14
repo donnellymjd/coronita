@@ -40,9 +40,10 @@ def param_str_maker(model_dict):
 def ch_exposed_infectious(df_agg, model_dict, param_str, chart_title=""):
     plt.style.use('fivethirtyeight')
     df_chart = df_agg[['exposed', 'infectious']]
+    df_chart = df_chart.clip(lower=0)
 
-    ax = df_chart.plot.area(figsize=[14, 8], title=chart_title, legend=True,
-                            color=['#e5ae38', '#fc4f30'])
+    ax = df_chart.plot.area(figsize=[14, 8], title='Simultaneous Infections Forecast\n'+chart_title,
+                            legend=True, color=['#e5ae38', '#fc4f30'])
     ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0f}'))
 
     plt.legend(['Exposed Population', 'Infectious Population'],
@@ -50,6 +51,7 @@ def ch_exposed_infectious(df_agg, model_dict, param_str, chart_title=""):
     ax2 = ax.twinx()
 
     r_t = model_dict['df_rts']['rt_joint_est'].copy()
+    r_t = r_t.reindex(df_chart.index)
     r_t[df_chart.index[0]:df_chart.index[-1]].plot(ax=ax2, color='black', linewidth=2, linestyle='--',
                                                    label=r'Reproduction Factor ($R_t$) - Right Axis', legend=True)
     plt.legend(loc="lower right")
@@ -71,22 +73,24 @@ def ch_exposed_infectious(df_agg, model_dict, param_str, chart_title=""):
     plt.annotate(footnote_str,
                  (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
 
-    plt.show()
+    
     return
 
 
 def ch_cumul_infections(df_agg, model_dict, param_str, chart_title=""):
     plt.style.use('fivethirtyeight')
     df_chart = df_agg[['exposed', 'infectious', 'recovered', 'hospitalized', 'deaths']].sum(axis=1)
+    df_chart = df_chart.clip(lower=0)
     df_chart = df_chart.iloc[8:]
 
-    ax = df_chart.plot(figsize=[14, 8], title=chart_title, legend=True,
-                       label='Forecast Cumulative Infections')
+    ax = df_chart.plot(figsize=[14, 8], title='Cumulative Infections Forecast\n'+chart_title,
+                       legend=True, label='Forecast Cumulative Infections',
+                       color=['black'])
     ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0f}'))
 
     if 'cases_tot' in model_dict['df_hist'].columns:
         model_dict['df_hist']['cases_tot'].loc[df_chart.index[0]:].plot(
-            ax=ax, linestyle=':', legend=True, color=['#008fd5'],
+            ax=ax, linestyle=':', legend=True, color=['black'],
             label='Reported Cumulative Infections')
     plt.legend(loc='upper left', bbox_to_anchor=(1.07, 0.95), ncol=1)
     ax.text(1.08, 0.05, param_str, transform=ax.transAxes,
@@ -96,22 +100,22 @@ def ch_cumul_infections(df_agg, model_dict, param_str, chart_title=""):
         pd.Timestamp.today().strftime("%d %b %Y"))
     plt.annotate(footnote_str,
                  (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
-    plt.show()
+    
 
 
-def ch_daily_exposures(df_all_cohorts, model_dict, param_str, chart_title=""):
+def ch_daily_exposures(df_agg, model_dict, param_str, chart_title=""):
     plt.style.use('fivethirtyeight')
-    df_chart = df_all_cohorts.stack().unstack(['metric'])[['exposed']].reset_index()
-    df_chart = df_chart[(df_chart.dt == df_chart.cohort_dt)].set_index(['dt'])['exposed']
+    df_chart = df_agg['exposed_daily']
 
-    ax = df_chart.plot(figsize=[14, 8], title=chart_title, legend=True, color=['#e5ae38'],
-                       label='Forecast Daily New Infections')
+    ax = df_chart.plot(figsize=[14, 8], title='Daily Exposures Forecast\n'+chart_title,
+                       legend=True, color=['#e5ae38'],
+                       label='Forecast Daily New Infections (Exposed)')
     ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0f}'))
 
     if 'cases_tot' in model_dict['df_hist'].columns:
         model_dict['df_hist']['cases_tot'].loc[df_chart.index[0]:].diff().plot(
             ax=ax, linestyle=':', legend=True, color=['#e5ae38'],
-            label='Reported Daily New Infections')
+            label='Reported Daily New Infections (Exposed)')
     plt.legend(loc='upper left', bbox_to_anchor=(1.07, 0.95), ncol=1)
     ax.text(1.08, 0.05, param_str, transform=ax.transAxes,
             verticalalignment='bottom', bbox={'ec': 'black', 'lw': 1})
@@ -120,21 +124,31 @@ def ch_daily_exposures(df_all_cohorts, model_dict, param_str, chart_title=""):
         pd.Timestamp.today().strftime("%d %b %Y"))
     plt.annotate(footnote_str,
                  (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
-    plt.show()
 
 
 def ch_hosp(df_agg, model_dict, param_str, chart_title=""):
-    df_chart = df_agg[['hospitalized', 'icu', 'vent', 'deaths']]
+    df_chart = df_agg[['hospitalized', 'icu', 'vent', 'deaths']].copy()
+    df_chart = df_chart.rename(columns={'hospitalized':'Forecast Concurrent Hospitalizations',
+                                        'icu':'Forecast ICU Cases',
+                                        'vent':'Forecast Ventilations',
+                                        'deaths':'Forecast Cumulative Deaths'})
 
-    ax = df_chart.plot(figsize=[14, 8], title=chart_title)
+    ax = df_chart.plot(figsize=[14, 8], title='Hospitalization and Deaths Forecast\n'+chart_title,
+                       color=['#6d904f', '#8b8b8b', '#810f7c', '#fc4f30'],
+                       label=['Forecast Concurrent Hospitalizations',
+                              'Forecast ICU Cases',
+                              'Forecast Ventilations',
+                              'Forecast Cumulative Deaths'])
     _ = ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0f}'))
     if 'hosp_concur' in model_dict['df_hist'].columns:
         model_dict['df_hist']['hosp_concur'].plot(ax=ax, linestyle=':', legend=True,
-                                   label='Reported Concurrent Hospitalizations')
+                                                  label='Reported Concurrent Hospitalizations',
+                                                  color=['#6d904f'])
     if 'deaths_tot' in model_dict['df_hist'].columns:
         model_dict['df_hist']['deaths_tot'].loc[
-        df_chart.index[0]:].plot(ax=ax, linestyle='-.', legend=True,
-                                 label='Reported Total Deaths')
+        df_chart.index[0]:].plot(ax=ax, linestyle=':', legend=True,
+                                 label='Reported Total Deaths',
+                                 color='#fc4f30')
     plt.legend(loc='upper left', bbox_to_anchor=(1.07, 0.95), ncol=1)
     ax.text(1.08, 0.05, param_str, transform=ax.transAxes,
             verticalalignment='bottom', bbox={'ec': 'black', 'lw': 1})
@@ -143,7 +157,49 @@ def ch_hosp(df_agg, model_dict, param_str, chart_title=""):
         pd.Timestamp.today().strftime("%d %b %Y"))
     plt.annotate(footnote_str,
                  (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
-    plt.show()
+    
+
+def ch_hosp_admits(df_agg, model_dict, param_str, chart_title=""):
+    df_chart = df_agg['hosp_admits']
+
+    ax = df_chart.plot(figsize=[14, 8], title='Daily Hospital Admissions Forecast\n'+chart_title,
+                       label='Forecast Hospital Admissions',
+                       color='#6d904f')
+    _ = ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0f}'))
+    if 'hosp_admits' in model_dict['df_hist'].columns:
+        model_dict['df_hist']['hosp_admits'].plot(ax=ax, linestyle=':', legend=True,
+                                                  label='Reported Hospital Admissions',
+                                                  color='#6d904f'
+                                                  )
+    plt.legend(loc='upper left', bbox_to_anchor=(1.07, 0.95), ncol=1)
+    ax.text(1.08, 0.05, param_str, transform=ax.transAxes,
+            verticalalignment='bottom', bbox={'ec': 'black', 'lw': 1})
+    ax.set_xlabel('')
+    footnote_str = 'Author: Michael Donnelly (twtr: @donnellymjd)\nChart created on {}'.format(
+        pd.Timestamp.today().strftime("%d %b %Y"))
+    plt.annotate(footnote_str,
+                 (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
+
+def ch_daily_deaths(df_agg, model_dict, param_str, chart_title=""):
+    df_chart = df_agg['deaths'].diff()
+
+    ax = df_chart.plot(figsize=[14, 8], title='Daily Deaths Forecast\n'+chart_title,
+                       label='Forecast Daily Deaths',
+                       color='#fc4f30')
+    _ = ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0f}'))
+    if 'deaths_daily' in model_dict['df_hist'].columns:
+        model_dict['df_hist']['deaths_daily'].plot(ax=ax, linestyle=':', legend=True,
+                                                  label='Reported Daily Deaths',
+                                                  color='#fc4f30'
+                                                  )
+    plt.legend(loc='upper left', bbox_to_anchor=(1.07, 0.95), ncol=1)
+    ax.text(1.08, 0.05, param_str, transform=ax.transAxes,
+            verticalalignment='bottom', bbox={'ec': 'black', 'lw': 1})
+    ax.set_xlabel('')
+    footnote_str = 'Author: Michael Donnelly (twtr: @donnellymjd)\nChart created on {}'.format(
+        pd.Timestamp.today().strftime("%d %b %Y"))
+    plt.annotate(footnote_str,
+                 (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
 
 
 def ch_doubling_rt(df_agg, model_dict, param_str, chart_title=""):
@@ -152,7 +208,7 @@ def ch_doubling_rt(df_agg, model_dict, param_str, chart_title=""):
     #     df_chart = df_chart.loc[hosp_obs_dt:]
     df_chart = df_chart.iloc[8:]
 
-    ax = df_chart.plot(figsize=[14, 8], title='Forecast Doubling Rate: ' + chart_title,
+    ax = df_chart.plot(figsize=[14, 8], title='Doubling Rate Forecast\n' + chart_title,
                        color=['#008fd5', '#e5ae38'])
     if 'hosp_concur' in model_dict['df_hist'].columns:
         hosp_dr = np.log(2) / model_dict['df_hist']['hosp_concur'].pct_change().rolling(3).mean()
@@ -161,8 +217,8 @@ def ch_doubling_rt(df_agg, model_dict, param_str, chart_title=""):
 
     if 'deaths_tot' in model_dict['df_hist'].columns:
         deaths_dr = np.log(2) / model_dict['df_hist']['deaths_tot'].pct_change().rolling(3) \
-                                    .mean().loc[hosp_dr.index[0]:]
-        deaths_dr.plot(ax=ax, linestyle='-.', legend=True, color=['#e5ae38'],
+                                    .mean()
+        deaths_dr.plot(ax=ax, linestyle=':', legend=True, color=['#e5ae38'],
                        label='Reported Total Deaths')
     plt.yscale('log')
     _ = ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.1f}'))
@@ -174,14 +230,20 @@ def ch_doubling_rt(df_agg, model_dict, param_str, chart_title=""):
         pd.Timestamp.today().strftime("%d %b %Y"))
     plt.annotate(footnote_str,
                  (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
-    plt.show()
 
 
 def ch_population_share(df_agg, model_dict, param_str, chart_title=""):
     df_chart = df_agg[['susceptible', 'deaths', 'exposed', 'hospitalized', 'infectious', 'recovered']]
+    df_chart = df_chart.rename(columns={'susceptible':'Forecast Susceptible Population',
+                                        'exposed':'Forecast Exposures',
+                                        'infectious':'Forecast Infectious',
+                                        'hospitalized':'Forecast Hospitalizations',
+                                        'recovered':'Forecast Recoveries',
+                                        'deaths':'Forecast Deaths'})
+    df_chart = df_chart.clip(lower=0)
     df_chart = df_chart.iloc[8:]
 
-    ax = df_chart.plot.area(figsize=[14, 8], title=chart_title)
+    ax = df_chart.plot.area(figsize=[14, 8], title='Population Overview Forecast\n'+chart_title)
     ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0f}'))
     plt.legend(loc='upper left', bbox_to_anchor=(1.07, 0.95), ncol=1)
     ax2 = ax.twinx()
@@ -201,15 +263,19 @@ def ch_population_share(df_agg, model_dict, param_str, chart_title=""):
         pd.Timestamp.today().strftime("%d %b %Y"))
     plt.annotate(footnote_str,
                  (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
-    plt.show()
+    
 
 def ch_rts(model_dict, param_str, chart_title=""):
     plt.style.use('fivethirtyeight')
     solo_rts = [x for x in model_dict['df_rts'].columns if x in
                 ['rt_deaths_daily', 'rt_hosp_concur', 'rt_hosp_admits', 'rt_pos_test_share_daily', 'rt_cases_daily']]
     ax = model_dict['df_rts'][solo_rts].dropna(how='all').plot(figsize=[14, 8], alpha=0.2,
-                                                               title=chart_title, legend=True)
+                                                               title=r'Reproduction Rate ($R_{t}$) Estimates'+'\n'+chart_title,
+                                                               legend=True)
+
     model_dict['df_rts']['rt_joint_est'].dropna().plot(ax=ax, legend=True)
+
+    ax.set_ylim([0,ax.get_ylim()[1]])
 
     plt.legend(loc='upper left', bbox_to_anchor=(1.07, 0.95), ncol=1)
 
@@ -220,27 +286,58 @@ def ch_rts(model_dict, param_str, chart_title=""):
         pd.Timestamp.today().strftime("%d %b %Y"))
     plt.annotate(footnote_str,
                  (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
-    plt.show()
+    
 
-def run_all_charts(model_dict, df_agg, df_all_cohorts):
-    chart_title = "{0}: {1} Scenario\nForecast".format(
-        model_dict['region_name'], '')
+def run_all_charts(model_dict, df_agg, scenario_name='', pdf_out=False):
+    chart_title = "{0}: {1} Scenario".format(
+        model_dict['region_name'], scenario_name)
 
     param_str = param_str_maker(model_dict)
 
-    ch_exposed_infectious(df_agg, model_dict, param_str, chart_title)
-
-    ch_hosp(df_agg, model_dict, param_str, chart_title)
-
-    ch_cumul_infections(df_agg, model_dict, param_str, chart_title)
-
-    ch_daily_exposures(df_all_cohorts, model_dict, param_str, chart_title)
-
-    ch_population_share(df_agg, model_dict, param_str, chart_title)
-
-    ch_doubling_rt(df_agg, model_dict, param_str, chart_title)
+    if pdf_out and type(pdf_out) == str:
+        from matplotlib.backends.backend_pdf import PdfPages
+        pdf_obj = PdfPages(pdf_out)
+    elif pdf_out:
+        from matplotlib.backends.backend_pdf import PdfPages
+        pdf_obj = pdf_out
 
     ch_rts(model_dict, param_str, chart_title)
+    if pdf_out: plt.tight_layout(); pdf_obj.savefig()
+    plt.show()
+
+    ch_exposed_infectious(df_agg, model_dict, param_str, chart_title)
+    if pdf_out: plt.tight_layout(); pdf_obj.savefig()
+    plt.show()
+
+    ch_hosp(df_agg, model_dict, param_str, chart_title)
+    if pdf_out: plt.tight_layout(); pdf_obj.savefig()
+    plt.show()
+
+    ch_population_share(df_agg, model_dict, param_str, chart_title)
+    if pdf_out: plt.tight_layout(); pdf_obj.savefig()
+    plt.show()
+
+    ch_cumul_infections(df_agg, model_dict, param_str, chart_title)
+    if pdf_out: plt.tight_layout(); pdf_obj.savefig()
+    plt.show()
+
+    ch_daily_exposures(df_agg, model_dict, param_str, chart_title)
+    if pdf_out: plt.tight_layout(); pdf_obj.savefig()
+    plt.show()
+
+    ch_hosp_admits(df_agg, model_dict, param_str, chart_title)
+    if pdf_out: plt.tight_layout(); pdf_obj.savefig()
+    plt.show()
+
+    ch_daily_deaths(df_agg, model_dict, param_str, chart_title)
+    if pdf_out: plt.tight_layout(); pdf_obj.savefig()
+    plt.show()
+
+    ch_doubling_rt(df_agg, model_dict, param_str, chart_title)
+    if pdf_out: plt.tight_layout(); pdf_obj.savefig()
+    plt.show()
+
+    if pdf_out and type(pdf_out) == str: pdf_obj.close()
 
     print('Peak Hospitalization Date: ', df_agg.hospitalized.idxmax().strftime("%d %b, %Y"))
     print('Peak Hospitalization #: {:.0f}'.format(df_agg.hospitalized.max()))
