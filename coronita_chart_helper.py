@@ -72,9 +72,7 @@ def ch_exposed_infectious(df_agg, model_dict, param_str, chart_title=""):
         pd.Timestamp.today().strftime("%d %b %Y"))
     plt.annotate(footnote_str,
                  (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
-
-    
-    return
+    return ax
 
 
 def ch_cumul_infections(df_agg, model_dict, param_str, chart_title=""):
@@ -100,7 +98,7 @@ def ch_cumul_infections(df_agg, model_dict, param_str, chart_title=""):
         pd.Timestamp.today().strftime("%d %b %Y"))
     plt.annotate(footnote_str,
                  (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
-    
+    return ax
 
 
 def ch_daily_exposures(df_agg, model_dict, param_str, chart_title=""):
@@ -124,6 +122,7 @@ def ch_daily_exposures(df_agg, model_dict, param_str, chart_title=""):
         pd.Timestamp.today().strftime("%d %b %Y"))
     plt.annotate(footnote_str,
                  (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
+    return ax
 
 
 def ch_hosp(df_agg, model_dict, param_str, chart_title=""):
@@ -157,6 +156,7 @@ def ch_hosp(df_agg, model_dict, param_str, chart_title=""):
         pd.Timestamp.today().strftime("%d %b %Y"))
     plt.annotate(footnote_str,
                  (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
+    return ax
     
 
 def ch_hosp_admits(df_agg, model_dict, param_str, chart_title=""):
@@ -179,6 +179,8 @@ def ch_hosp_admits(df_agg, model_dict, param_str, chart_title=""):
         pd.Timestamp.today().strftime("%d %b %Y"))
     plt.annotate(footnote_str,
                  (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
+    return ax
+
 
 def ch_daily_deaths(df_agg, model_dict, param_str, chart_title=""):
     df_chart = df_agg['deaths'].diff()
@@ -200,6 +202,7 @@ def ch_daily_deaths(df_agg, model_dict, param_str, chart_title=""):
         pd.Timestamp.today().strftime("%d %b %Y"))
     plt.annotate(footnote_str,
                  (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
+    return ax
 
 
 def ch_doubling_rt(df_agg, model_dict, param_str, chart_title=""):
@@ -230,6 +233,7 @@ def ch_doubling_rt(df_agg, model_dict, param_str, chart_title=""):
         pd.Timestamp.today().strftime("%d %b %Y"))
     plt.annotate(footnote_str,
                  (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
+    return ax
 
 
 def ch_population_share(df_agg, model_dict, param_str, chart_title=""):
@@ -263,7 +267,8 @@ def ch_population_share(df_agg, model_dict, param_str, chart_title=""):
         pd.Timestamp.today().strftime("%d %b %Y"))
     plt.annotate(footnote_str,
                  (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
-    
+    return ax
+
 
 def ch_rts(model_dict, param_str, chart_title=""):
     plt.style.use('fivethirtyeight')
@@ -286,9 +291,33 @@ def ch_rts(model_dict, param_str, chart_title=""):
         pd.Timestamp.today().strftime("%d %b %Y"))
     plt.annotate(footnote_str,
                  (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
+    return ax
+
+
+def ch_statemap(df_chart, region_name, scope=['USA']):
+    import plotly.express as px
+    import plotly.figure_factory as ff
+
+    chart_title = region_name + ': COVID-19 Cases Per 100k Residents'
+
+    fig = ff.create_choropleth(
+        fips=df_chart['fips'],
+        values=df_chart['cases_per100k'], show_state_data=True,
+        scope=scope,  # Define your scope
+        round_legend_values=True,
+        colorscale=px.colors.sequential.amp,
+        binning_endpoints=list(np.linspace(0, 1000, 11)),
+        county_outline={'color': 'rgb(255,255,255)', 'width': 0.5},
+        state_outline={'color': 'black', 'width': 1.0},
+        legend_title='cases_per100k', title=chart_title,
+        width=800, height=400,
+        font=dict(size=12)
+    )
+
+    return fig
     
 
-def run_all_charts(model_dict, df_agg, scenario_name='', pdf_out=False):
+def run_all_charts(model_dict, df_agg, scenario_name='', pdf_out=False, show_charts=True):
     chart_title = "{0}: {1} Scenario".format(
         model_dict['region_name'], scenario_name)
 
@@ -301,41 +330,68 @@ def run_all_charts(model_dict, df_agg, scenario_name='', pdf_out=False):
         from matplotlib.backends.backend_pdf import PdfPages
         pdf_obj = pdf_out
 
-    ch_rts(model_dict, param_str, chart_title)
-    if pdf_out: plt.tight_layout(); pdf_obj.savefig()
-    plt.show()
+    ax = ch_rts(model_dict, param_str, chart_title)
+    if pdf_out: pdf_obj.savefig(bbox_inches='tight', pad_inches=1, optimize=True, facecolor='white')
+    if show_charts: 
+        plt.show()
+    else: 
+        plt.close()
 
-    ch_exposed_infectious(df_agg, model_dict, param_str, chart_title)
-    if pdf_out: plt.tight_layout(); pdf_obj.savefig()
-    plt.show()
+    ax = ch_exposed_infectious(df_agg, model_dict, param_str, chart_title)
+    if pdf_out: pdf_obj.savefig(bbox_inches='tight', pad_inches=1, optimize=True, facecolor='white')
+    if show_charts: 
+        plt.show()
+    else: 
+        plt.close()
 
-    ch_hosp(df_agg, model_dict, param_str, chart_title)
-    if pdf_out: plt.tight_layout(); pdf_obj.savefig()
-    plt.show()
+    ax = ch_hosp(df_agg, model_dict, param_str, chart_title)
+    if pdf_out: pdf_obj.savefig(bbox_inches='tight', pad_inches=1, optimize=True, facecolor='white')
+    if show_charts: 
+        plt.show()
+    else: 
+        plt.close()
 
-    ch_population_share(df_agg, model_dict, param_str, chart_title)
-    if pdf_out: plt.tight_layout(); pdf_obj.savefig()
-    plt.show()
+    ax = ch_population_share(df_agg, model_dict, param_str, chart_title)
+    if pdf_out: pdf_obj.savefig(bbox_inches='tight', pad_inches=1, optimize=True, facecolor='white')
+    if show_charts: 
+        plt.show()
+    else: 
+        plt.close()
 
-    ch_cumul_infections(df_agg, model_dict, param_str, chart_title)
-    if pdf_out: plt.tight_layout(); pdf_obj.savefig()
-    plt.show()
+    ax = ch_cumul_infections(df_agg, model_dict, param_str, chart_title)
+    if pdf_out: pdf_obj.savefig(bbox_inches='tight', pad_inches=1, optimize=True, facecolor='white')
+    if show_charts: 
+        plt.show()
+    else: 
+        plt.close()
 
-    ch_daily_exposures(df_agg, model_dict, param_str, chart_title)
-    if pdf_out: plt.tight_layout(); pdf_obj.savefig()
-    plt.show()
+    ax = ch_daily_exposures(df_agg, model_dict, param_str, chart_title)
+    if pdf_out: pdf_obj.savefig(bbox_inches='tight', pad_inches=1, optimize=True, facecolor='white')
+    if show_charts: 
+        plt.show()
+    else: 
+        plt.close()
 
-    ch_hosp_admits(df_agg, model_dict, param_str, chart_title)
-    if pdf_out: plt.tight_layout(); pdf_obj.savefig()
-    plt.show()
+    ax = ch_hosp_admits(df_agg, model_dict, param_str, chart_title)
+    if pdf_out: pdf_obj.savefig(bbox_inches='tight', pad_inches=1, optimize=True, facecolor='white')
+    if show_charts: 
+        plt.show()
+    else: 
+        plt.close()
 
-    ch_daily_deaths(df_agg, model_dict, param_str, chart_title)
-    if pdf_out: plt.tight_layout(); pdf_obj.savefig()
-    plt.show()
+    ax = ch_daily_deaths(df_agg, model_dict, param_str, chart_title)
+    if pdf_out: pdf_obj.savefig(bbox_inches='tight', pad_inches=1, optimize=True, facecolor='white')
+    if show_charts: 
+        plt.show()
+    else: 
+        plt.close()
 
-    ch_doubling_rt(df_agg, model_dict, param_str, chart_title)
-    if pdf_out: plt.tight_layout(); pdf_obj.savefig()
-    plt.show()
+    ax = ch_doubling_rt(df_agg, model_dict, param_str, chart_title)
+    if pdf_out: pdf_obj.savefig(bbox_inches='tight', pad_inches=1, optimize=True, facecolor='white')
+    if show_charts: 
+        plt.show()
+    else: 
+        plt.close()
 
     if pdf_out and type(pdf_out) == str: pdf_obj.close()
 

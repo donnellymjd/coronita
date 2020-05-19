@@ -85,7 +85,9 @@ def get_nys_region():
 def get_nyt_counties():
     raw_reporting = pd.read_csv('https://github.com/nytimes/covid-19-data/raw/master/us-counties.csv')
     df_reporting = raw_reporting
+    df_reporting['fips']= df_reporting['fips'].astype(str).replace('\.0', '', regex=True).str.zfill(5)
     df_reporting['dt'] = pd.to_datetime(df_reporting.date)
+    df_reporting = df_reporting.drop(columns=['date'])
     df_reporting = df_reporting.set_index(['dt','state','county']).sort_index()
     return df_reporting
 
