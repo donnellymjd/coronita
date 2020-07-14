@@ -74,7 +74,7 @@ dict_ch_defs['ch_detection_rt'] = """Daily Infection Detection Rate
 def add_plotly_footnote(fig):
     fig.update_layout(
                   annotations=[
-                      dict(x = 0, y = -0.075, showarrow = False,
+                      dict(x = 0, y = -0.06, showarrow = False,
                            xref='paper', yref='paper',
                            xanchor='left', yanchor='auto', xshift=0, yshift=0,
                            text='Author: Michael Donnelly | twtr: <a href="https://twitter.com/donnellymjd">@donnellymjd</a> | <a href="http://{0}">{0}</a>'.format(
@@ -130,23 +130,30 @@ def ch_exposure_prob(df_fore_allstates, s_pop):
         pd.Timestamp.today().date()].loc[['exposed', 'infectious']].sum().div(
         s_pop).sort_values()
 
+    colorbar_name = 'Probability'
+
     df_chart = (1 - (1 - infectious_contact_prob) ** 10).reset_index()
-    df_chart.columns = ['state', 'Exposure Probability (%)']
-    df_chart['Exposure Probability (%)'] = df_chart['Exposure Probability (%)'].mul(100).round(1)
+    df_chart.columns = ['state', colorbar_name]
+    df_chart[colorbar_name] = df_chart[colorbar_name].mul(100).round(1)
 
     import plotly.express as px
 
     chart_title = 'US: Current Model-Estimated COVID-19 Exposure Probability Per 10 Contacts'
 
-    fig = px.choropleth(df_chart[['state', 'Exposure Probability (%)']],
+    fig = px.choropleth(df_chart[['state', colorbar_name]],
                         locations=df_chart['state'],
                         locationmode="USA-states",
-                        color='Exposure Probability (%)',
+                        color=colorbar_name,
                         color_continuous_scale="BuPu",
                         title=chart_title,
-                        projection='albers usa'
+                        projection='albers usa',
                         )
-
+    fig.update_layout(autosize=True,
+            margin=dict(l=10,r=10,b=100,t=100, pad=0),
+        coloraxis_colorbar=dict(len=0.75,thickness=30,
+                                yanchor="top", y=1,
+                                ticks="outside", ticksuffix="%")
+        )
     fig = add_plotly_footnote(fig)
 
     return fig

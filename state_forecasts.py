@@ -22,83 +22,29 @@ from coronita_web_helper import *
 from matplotlib.backends.backend_pdf import PdfPages
 
 
-# # Data Ingestion
-
-# ## Bring in State Data
-
-# In[2]:
-
+## DATA INGESTION ##
 
 df_st_testing = get_covid19_tracking_data()
 
-
-# In[3]:
-
-
-df_st_testing.dateChecked
-
-
-# In[4]:
-
-
 df_census = get_census_pop()
 
-
-# In[ ]:
-
-
-df_counties = get_complete_county_data() #get_nyt_counties()
-
-# In[ ]:
-
+df_counties = get_complete_county_data()
 
 counties_geo = get_counties_geo()
 
-
-# In[ ]:
-
-
 df_jhu_counties = get_jhu_counties()
-
-
-# In[ ]:
-
-
-# df_counties_enhanced = pd.merge(
-#     df_census[df_census.SUMLEV==50], 
-#     df_counties.loc[[(df_counties.index.levels[0][-1])]].reset_index()[['dt','fips','cases','deaths']], 
-#     on='fips', how='left')
-# df_counties_enhanced['cases_per100k']= df_counties_enhanced['cases'].mul(1e5).div(df_counties_enhanced['pop2019'])
-# df_counties_enhanced.head()
-
-
-# In[ ]:
-
 
 df_st_testing_fmt = df_st_testing.copy()
 df_st_testing_fmt = df_st_testing_fmt.rename(columns={'death':'deaths','positive':'cases'}).unstack('code')
 
-
-# In[ ]:
-
 df_interventions = get_state_policy_events()
-
-
-# In[ ]:
-
 
 df_goog_mob_us = get_goog_mvmt_us()
 df_goog_mob_us = df_goog_mob_us[df_goog_mob_us.state.isnull()].set_index('dt')
 
-
-# In[ ]:
-
-
 df_goog_mob_state = get_goog_mvmt_state()
 
-
-# In[ ]:
-
+## MODEL PARAMETERS ##
 
 covid_params = {}
 covid_params['d_incub'] = 3.
