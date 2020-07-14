@@ -183,14 +183,8 @@ def ch_exposed_infectious(df_agg, model_dict, param_str, chart_title=""):
             verticalalignment='bottom', bbox={'ec': 'black', 'lw': 1})
 
     ax.set_xlabel('')
-<<<<<<< HEAD
     
     plt.annotate(footnote_str_maker(),
-=======
-    footnote_str = 'Author: Michael Donnelly (twtr: @donnellymjd)\nChart created on {}'.format(
-        pd.Timestamp.today().strftime("%d %b %Y"))
-    plt.annotate(footnote_str,
->>>>>>> 7be594586e2664f58c707421e53ce1b5ca60d1aa
                  (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
     return ax
 
@@ -214,14 +208,8 @@ def ch_cumul_infections(df_agg, model_dict, param_str, chart_title=""):
     ax.text(1.08, 0.05, param_str, transform=ax.transAxes,
             verticalalignment='bottom', bbox={'ec': 'black', 'lw': 1})
     ax.set_xlabel('')
-<<<<<<< HEAD
     
     plt.annotate(footnote_str_maker(),
-=======
-    footnote_str = 'Author: Michael Donnelly (twtr: @donnellymjd)\nChart created on {}'.format(
-        pd.Timestamp.today().strftime("%d %b %Y"))
-    plt.annotate(footnote_str,
->>>>>>> 7be594586e2664f58c707421e53ce1b5ca60d1aa
                  (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
     return ax
 
@@ -409,7 +397,6 @@ def ch_population_share(df_agg, model_dict, param_str, chart_title=""):
     ax.text(1.08, 0.05, param_str, transform=ax.transAxes,
             verticalalignment='bottom', bbox={'ec': 'black', 'lw': 1})
     ax.set_xlabel('')
-<<<<<<< HEAD
     
     plt.annotate(footnote_str_maker(),
                  (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
@@ -475,14 +462,6 @@ def bk_population_share(df_agg, model_dict, param_str, chart_title=""):
     p = add_bokeh_footnote(p)
 
     return p
-=======
-    footnote_str = 'Author: Michael Donnelly (twtr: @donnellymjd)\nChart created on {}'.format(
-        pd.Timestamp.today().strftime("%d %b %Y"))
-    plt.annotate(footnote_str,
-                 (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
-    return ax
-
->>>>>>> 7be594586e2664f58c707421e53ce1b5ca60d1aa
 
 def ch_rts(model_dict, param_str, chart_title=""):
     plt.style.use('fivethirtyeight')
@@ -512,7 +491,6 @@ def ch_rts(model_dict, param_str, chart_title=""):
                  (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
     return ax
 
-<<<<<<< HEAD
 def ch_rt_confid(df_rt, param_str, chart_title=""):
     rt_name = df_rt.columns.levels[0][0]
     df_rt = df_rt[rt_name].dropna(how='all')
@@ -537,35 +515,10 @@ def ch_rt_confid(df_rt, param_str, chart_title=""):
     ax.text(1.08, 0.05, param_str, transform=ax.transAxes,
             verticalalignment='bottom', bbox={'ec': 'black', 'lw': 1})
     ax.set_xlabel('')
-=======
-
-def ch_statemap(df_chart, region_name, scope=['USA']):
-    import plotly.express as px
-    import plotly.figure_factory as ff
-
-    chart_title = region_name + ': COVID-19 Cases Per 100k Residents'
-
-    fig = ff.create_choropleth(
-        fips=df_chart['fips'],
-        values=df_chart['cases_per100k'], show_state_data=True,
-        scope=scope,  # Define your scope
-        round_legend_values=True,
-        colorscale=px.colors.sequential.amp,
-        binning_endpoints=list(np.linspace(0, 1000, 11)),
-        county_outline={'color': 'rgb(255,255,255)', 'width': 0.5},
-        state_outline={'color': 'black', 'width': 1.0},
-        legend_title='cases_per100k', title=chart_title,
-        width=800, height=400,
-        font=dict(size=12)
-    )
-
-    return fig
->>>>>>> 7be594586e2664f58c707421e53ce1b5ca60d1aa
     
     plt.annotate(footnote_str_maker(),
                  (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
 
-<<<<<<< HEAD
     return ax
 
 def ch_statemap(df_chart, region_name, scope=['USA']):
@@ -805,9 +758,6 @@ def add_event_lines(ax, df_interventions):
 
 
 def run_all_charts(model_dict, df_agg, scenario_name='', pdf_out=False, show_charts=True, pub2web=False):
-=======
-def run_all_charts(model_dict, df_agg, scenario_name='', pdf_out=False, show_charts=True):
->>>>>>> 7be594586e2664f58c707421e53ce1b5ca60d1aa
     chart_title = "{0}: {1} Scenario".format(
         model_dict['region_name'], scenario_name)
 
@@ -821,21 +771,15 @@ def run_all_charts(model_dict, df_agg, scenario_name='', pdf_out=False, show_cha
         from matplotlib.backends.backend_pdf import PdfPages
         pdf_obj = pdf_out
 
-<<<<<<< HEAD
     ax = ch_rt_confid(model_dict['df_rts_conf'][['weighted_average']].unstack('metric'), param_str, model_dict['region_name'])
     if event_lines.shape[0] > 0: add_event_lines(ax, event_lines)
     if pdf_out: pdf_obj.savefig(bbox_inches='tight', pad_inches=1, optimize=True, facecolor='white')
     if pub2web: plt.savefig('../donnellymjd.github.io/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], 'ch_rt_confid'), bbox_inches='tight')
-=======
-    ax = ch_rts(model_dict, param_str, chart_title)
-    if pdf_out: pdf_obj.savefig(bbox_inches='tight', pad_inches=1, optimize=True, facecolor='white')
->>>>>>> 7be594586e2664f58c707421e53ce1b5ca60d1aa
     if show_charts: 
         plt.show()
     else: 
         plt.close()
 
-<<<<<<< HEAD
     ax = ch_rts(model_dict, param_str, chart_title)
     if event_lines.shape[0] > 0: add_event_lines(ax, event_lines)
     if pdf_out: pdf_obj.savefig(bbox_inches='tight', pad_inches=1, optimize=True, facecolor='white')
@@ -859,97 +803,66 @@ def run_all_charts(model_dict, df_agg, scenario_name='', pdf_out=False, show_cha
     # if event_lines.shape[0] > 0: add_event_lines(ax, event_lines)
     if pdf_out: pdf_obj.savefig(bbox_inches='tight', pad_inches=1, optimize=True, facecolor='white')
     if pub2web: plt.savefig('../donnellymjd.github.io/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], 'ch_exposed_infectious'), bbox_inches='tight')
-=======
-    ax = ch_exposed_infectious(df_agg, model_dict, param_str, chart_title)
-    if pdf_out: pdf_obj.savefig(bbox_inches='tight', pad_inches=1, optimize=True, facecolor='white')
->>>>>>> 7be594586e2664f58c707421e53ce1b5ca60d1aa
     if show_charts: 
         plt.show()
     else: 
         plt.close()
 
     ax = ch_hosp(df_agg, model_dict, param_str, chart_title)
-<<<<<<< HEAD
     # if event_lines.shape[0] > 0: add_event_lines(ax, event_lines)
     if pdf_out: pdf_obj.savefig(bbox_inches='tight', pad_inches=1, optimize=True, facecolor='white')
     if pub2web: plt.savefig('../donnellymjd.github.io/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], 'ch_hosp'), bbox_inches='tight')
-=======
-    if pdf_out: pdf_obj.savefig(bbox_inches='tight', pad_inches=1, optimize=True, facecolor='white')
->>>>>>> 7be594586e2664f58c707421e53ce1b5ca60d1aa
     if show_charts: 
         plt.show()
     else: 
         plt.close()
-<<<<<<< HEAD
     plt.close()
 
     ax = ch_population_share(df_agg, model_dict, param_str, chart_title)
     # if event_lines.shape[0] > 0: add_event_lines(ax, event_lines)
     if pdf_out: pdf_obj.savefig(bbox_inches='tight', pad_inches=1, optimize=True, facecolor='white')
     if pub2web: plt.savefig('../donnellymjd.github.io/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], 'ch_population_share'), bbox_inches='tight')
-=======
-
-    ax = ch_population_share(df_agg, model_dict, param_str, chart_title)
-    if pdf_out: pdf_obj.savefig(bbox_inches='tight', pad_inches=1, optimize=True, facecolor='white')
->>>>>>> 7be594586e2664f58c707421e53ce1b5ca60d1aa
     if show_charts: 
         plt.show()
     else: 
         plt.close()
 
     ax = ch_cumul_infections(df_agg, model_dict, param_str, chart_title)
-<<<<<<< HEAD
     # if event_lines.shape[0] > 0: add_event_lines(ax, event_lines)
     if pdf_out: pdf_obj.savefig(bbox_inches='tight', pad_inches=1, optimize=True, facecolor='white')
     if pub2web: plt.savefig('../donnellymjd.github.io/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], 'ch_cumul_infections'), bbox_inches='tight')
-=======
-    if pdf_out: pdf_obj.savefig(bbox_inches='tight', pad_inches=1, optimize=True, facecolor='white')
->>>>>>> 7be594586e2664f58c707421e53ce1b5ca60d1aa
     if show_charts: 
         plt.show()
     else: 
         plt.close()
 
     ax = ch_daily_exposures(df_agg, model_dict, param_str, chart_title)
-<<<<<<< HEAD
     # if event_lines.shape[0] > 0: add_event_lines(ax, event_lines)
     if pdf_out: pdf_obj.savefig(bbox_inches='tight', pad_inches=1, optimize=True, facecolor='white')
     if pub2web: plt.savefig('../donnellymjd.github.io/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], 'ch_daily_exposures'), bbox_inches='tight')
-=======
-    if pdf_out: pdf_obj.savefig(bbox_inches='tight', pad_inches=1, optimize=True, facecolor='white')
->>>>>>> 7be594586e2664f58c707421e53ce1b5ca60d1aa
     if show_charts: 
         plt.show()
     else: 
         plt.close()
 
     ax = ch_hosp_admits(df_agg, model_dict, param_str, chart_title)
-<<<<<<< HEAD
     # if event_lines.shape[0] > 0: add_event_lines(ax, event_lines)
     if pdf_out: pdf_obj.savefig(bbox_inches='tight', pad_inches=1, optimize=True, facecolor='white')
     if pub2web: plt.savefig('../donnellymjd.github.io/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], 'ch_hosp_admits'), bbox_inches='tight')
-=======
-    if pdf_out: pdf_obj.savefig(bbox_inches='tight', pad_inches=1, optimize=True, facecolor='white')
->>>>>>> 7be594586e2664f58c707421e53ce1b5ca60d1aa
     if show_charts: 
         plt.show()
     else: 
         plt.close()
 
     ax = ch_daily_deaths(df_agg, model_dict, param_str, chart_title)
-<<<<<<< HEAD
     # if event_lines.shape[0] > 0: add_event_lines(ax, event_lines)
     if pdf_out: pdf_obj.savefig(bbox_inches='tight', pad_inches=1, optimize=True, facecolor='white')
     if pub2web: plt.savefig('../donnellymjd.github.io/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], 'ch_daily_deaths'), bbox_inches='tight')
-=======
-    if pdf_out: pdf_obj.savefig(bbox_inches='tight', pad_inches=1, optimize=True, facecolor='white')
->>>>>>> 7be594586e2664f58c707421e53ce1b5ca60d1aa
     if show_charts: 
         plt.show()
     else: 
         plt.close()
 
-<<<<<<< HEAD
     ax = ch_detection_rt(df_agg, model_dict, param_str, chart_title)
     # if event_lines.shape[0] > 0: add_event_lines(ax, event_lines)
     if pdf_out: pdf_obj.savefig(bbox_inches='tight', pad_inches=1, optimize=True, facecolor='white')
@@ -990,10 +903,6 @@ def run_all_charts(model_dict, df_agg, scenario_name='', pdf_out=False, show_cha
     # if event_lines.shape[0] > 0: add_event_lines(ax, event_lines)
     if pdf_out: pdf_obj.savefig(bbox_inches='tight', pad_inches=1, optimize=True, facecolor='white')
     if pub2web: plt.savefig('../donnellymjd.github.io/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], 'ch_doubling_rt'), bbox_inches='tight')
-=======
-    ax = ch_doubling_rt(df_agg, model_dict, param_str, chart_title)
-    if pdf_out: pdf_obj.savefig(bbox_inches='tight', pad_inches=1, optimize=True, facecolor='white')
->>>>>>> 7be594586e2664f58c707421e53ce1b5ca60d1aa
     if show_charts: 
         plt.show()
     else: 
