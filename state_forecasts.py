@@ -6,7 +6,7 @@
 
 import pandas as pd
 import numpy as np
-import os, time, stat, io
+import os, time, stat, io, glob, pickle
 from scipy.stats import gamma, norm
 from sklearn.linear_model import LinearRegression
 
@@ -83,6 +83,12 @@ for region in df_st_testing_fmt['date'].columns:
         print('Cannot forecast {}'.format(region))
 
 df_rts_allregs.index.names = ['dt','metric']
+
+df_wavg_rt_conf_allregs.unstack('metric').to_csv(
+    './output/df_wavg_rt_conf_allregs_{}.csv'.format(pd.Timestamp.today().strftime("%Y%m%d")),
+    encoding='utf-8')
+df_wavg_rt_conf_allregs.to_pickle('./output/df_wavg_rt_conf_allregs_{}.pkl'.format(pd.Timestamp.today().strftime("%Y%m%d")))
+
 
 fig = ch_rt_summary(df_wavg_rt_conf_allregs)
 fig.write_html('./output/state_fore/rt_summary.html')
@@ -171,9 +177,10 @@ os.system(cmd_str)
 df_fore_allstates.unstack('metric').to_csv(
     './output/df_fore_allstates_{}.csv'.format(pd.Timestamp.today().strftime("%Y%m%d")),
     encoding='utf-8')
+df_fore_allstates.unstack('metric').to_csv(
+    '../COVIDoutlook/download/df_fore_allstates_{}.csv'.format(pd.Timestamp.today().strftime("%Y%m%d")),
+    encoding='utf-8')
 df_fore_allstates.to_pickle('./output/df_fore_allstates_{}.pkl'.format(pd.Timestamp.today().strftime("%Y%m%d")))
-
-import pickle
 
 asmd_filename = './output/allstate_model_dicts_{}.pkl'.format(pd.Timestamp.today().strftime("%Y%m%d"))
 
@@ -340,8 +347,50 @@ push_out = subprocess.check_output('git push',
 print(push_out)
 
 
-# In[ ]:
+#### POST FORECAST DATA TO COVIDOUTLOOK ####
 
+download_header = """---
+layout: page
+title: Data
+image: duotone5.png
+---
+This data page, like the rest of the site, is brand new. Unfortunately, it's not fully functional yet. Please check back here soon for downloadable datasets of the forecasts and other data displayed on this website.
 
+### Forecast Downloads (comma separated values)
+{}
+"""
+
+list_of_files = glob.glob('../COVIDoutlook/download/df_fore_allstates_*.csv')
+list_of_files = sorted(list_of_files)
+
+file_dict = {}
+
+for filename in list_of_files:
+    this_date = pd.to_datetime(filename[43:51])
+    file_dict[this_date] = (filename, this_date.strftime("%B %d, %Y"))
+
+output_md = []
+
+for key in reversed(sorted(file_dict.keys())):
+    this_file = file_dict[key]
+    output_md.append(' - [Forecast published on {0}]({1})'.format(this_file[1], this_file[0][15:]))
+
+final_md = download_header.format('\n'.join(output_md))
+
+with open('../COVIDoutlook/data.md', "w") as file:
+    file.write(final_md)
+
+git_dir = '/Users/mdonnelly/repos/COVIDoutlook/'
+git_commit_cmd = 'git commit -am "Auto update on {}"'.format(
+    pd.Timestamp.today().strftime("%Y-%m-%d at %I:%M %p"))
+print(git_commit_cmd)
+status_out = subprocess.check_output('git status',cwd=git_dir, shell=True).decode()
+print(status_out)
+status_out = subprocess.check_output('git add download/*.csv',cwd=git_dir, shell=True).decode()
+commit_out = subprocess.check_output(git_commit_cmd, cwd=git_dir, shell=True).decode()
+print(commit_out)
+push_out = subprocess.check_output('git push', cwd=git_dir, shell=True).decode()
+push_out = subprocess.check_output('git push heroku master', cwd=git_dir, shell=True).decode()
+print(push_out)
 
 
