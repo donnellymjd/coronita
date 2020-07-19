@@ -514,19 +514,6 @@ def ch_totaltests(model_dict):
                        )
     return ax
 
-def bk_totaltests(model_dict):
-    df_chart = model_dict['df_hist'][['cases_daily', 'pos_neg_tests_daily']].clip(lower=0)
-    df_chart['neg_tests_daily'] = (df_chart['pos_neg_tests_daily'] - df_chart['cases_daily']).clip(lower=0)
-
-    p = bk_bar_and_line_chart(bar_series=df_chart['neg_tests_daily'].dropna(how='all'),
-                       bar_name='# of Negative Tests',
-                       line_series=df_chart[['cases_daily','pos_neg_tests_daily']].max(axis=1).rolling(7, min_periods=1).mean(),
-                       line_name='7-Day Rolling Average Total Tests', yformat='{:0,.0f}',
-                       chart_title='{}: Total COVID-19 Tests Per Day'.format(model_dict['region_name']),
-                       bar2_series=df_chart['cases_daily'], bar2_name='# of Positive Tests'
-                       )
-    return p
-
 def ch_positivetests(model_dict):
     ax = bar_and_line_chart(bar_series=model_dict['df_hist']['cases_daily'].dropna(how='all'),
                        bar_name='# of Positive Tests', bar_color='#e5ae38',
