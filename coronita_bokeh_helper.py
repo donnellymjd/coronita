@@ -14,7 +14,7 @@ from bokeh.resources import INLINE
 
 from jinja2 import Template
 
-bk_theme = 'dark_minimal'
+bk_theme = 'light_minimal'
 
 def add_bokeh_footnote(p):
     msg1 = 'www.COVIDoutlook.info | twtr: @COVIDoutlook'
@@ -82,7 +82,7 @@ def bk_overview_layout(p, num_in_row=1, min_height=360):
         p.sizing_mode = 'scale_both'
     else:
         p.plot_height = int(min_height*1.2)
-        p.plot_width = int(min_height*4/3)
+        p.plot_width = int(min_height*5/3)
         p.sizing_mode = 'scale_width'
 
     #Possible values are "fixed", "scale_width", "scale_height", "scale_both", and "stretch_both"
@@ -91,6 +91,7 @@ def bk_overview_layout(p, num_in_row=1, min_height=360):
 
 def bk_repro_layout(p, num_in_row=1, min_height=360):
     p = bk_legend(p, location='center', orientation = 'horizontal')
+    p.legend.visible = False
     p.add_layout(p.legend[0], 'above')
 
     p.title.text_font_size = '100%'
@@ -183,21 +184,20 @@ def bk_bar_and_line_chart(bar_series, bar_name='bar', bar_color='#008fd5',
 
     return p
 
-def bk_rt_confid(model_dict, param_str, chart_title=""):
+def bk_rt_confid(model_dict, simplify=True):
     df_rt = model_dict['df_rts_conf'][['weighted_average']].unstack('metric')
     rt_name = df_rt.columns.levels[0][0]
     df_rt = df_rt[rt_name].dropna(how='all').reset_index()
 
-    p = figure(#title=model_dict['region_name'],
-               x_axis_type="datetime",
+    p = figure(x_axis_type="datetime",
                tools='pan,wheel_zoom,box_zoom,zoom_in,zoom_out,reset,save')
     p = bk_title(p, title=model_dict['region_name'], subtitle="Reproduction Rate (Rᵗ) Estimate")
 
     patch = p.varea(x='dt', y1='rt_l68', y2='rt_u68', source=df_rt,
                     color='#E39D22', alpha=0.75, legend_label='68% Confidence Interval', level='glyph')
-
-    patch2 = p.varea(x='dt', y1='rt_l95', y2='rt_u95', source=df_rt,
-                     color='#E39D22', alpha=0.25, legend_label='95% Confidence Interval', level='glyph')
+    if not simplify:
+        patch2 = p.varea(x='dt', y1='rt_l95', y2='rt_u95', source=df_rt,
+                         color='#E39D22', alpha=0.25, legend_label='95% Confidence Interval', level='glyph')
 
     bg_upper = p.varea(x=[df_rt.dt.min(), df_rt.dt.max()],
                        y1=[1.0, 1.0], y2=[df_rt.rt_u95.max(), df_rt.rt_u95.max()],
@@ -220,12 +220,13 @@ def bk_rt_confid(model_dict, param_str, chart_title=""):
                       )
                  )
 
-    p.add_layout(Label(
-        x=df_rt.dt.mean(), y=1.5, y_units='data', text='Rᵗ > 1: Epidemic Worsening',
-        text_color='white', text_alpha=0.4, text_font_size='2vw', text_align='center'))
-    p.add_layout(Label(
-        x=df_rt.dt.mean(), y=0.1, y_units='data', text='Rᵗ < 1: Epidemic Improving',
-        text_color='white', text_alpha=0.4, text_font_size='2vw', text_align='center'))
+    if not simplify:
+        p.add_layout(Label(
+            x=df_rt.dt.mean(), y=1.5, y_units='data', text='Rᵗ > 1: Epidemic Worsening',
+            text_color='white', text_alpha=0.4, text_font_size='2vw', text_align='center'))
+        p.add_layout(Label(
+            x=df_rt.dt.mean(), y=0.1, y_units='data', text='Rᵗ < 1: Epidemic Improving',
+            text_color='white', text_alpha=0.4, text_font_size='2vw', text_align='center'))
 
     p.add_tools(HoverTool(
         tooltips=[
@@ -250,9 +251,9 @@ def bk_population_share(df_agg, model_dict, param_str, chart_title=""):
     df_chart = df_chart.clip(lower=0)
     df_chart = df_chart.iloc[8:].reset_index()
 
-    p = figure(title='{}: Forecast Population Overview'.format(model_dict['region_name']),
-               x_axis_type="datetime",
+    p = figure(x_axis_type="datetime",
                tools='pan,wheel_zoom,box_zoom,zoom_in,zoom_out,reset,save')
+    p = bk_title(p, title=model_dict['region_name'], subtitle='Forecast Population Overview')
 
     p.varea_stack(col_names,
                   x='dt', source=df_chart,
@@ -302,9 +303,9 @@ def bk_postestshare(model_dict):
     df_chart['sevendayavg'] = df_chart['cases_daily'].mask(df_chart['cases_daily'] >= 1.0
                                                            ).rolling(7, min_periods=1).mean()
 
-    p = figure(title='{}: COVID-19 Positivity Rate'.format(model_dict['region_name']),
-               x_axis_type="datetime",
+    p = figure(x_axis_type="datetime",
                tools='pan,wheel_zoom,box_zoom,zoom_in,zoom_out,reset,save')
+    p = bk_title(p, title=model_dict['region_name'], subtitle='COVID-19 Positivity Rate')
 
     p.varea_stack(['cases_daily', 'neg_tests_daily'],
                   x='dt', source=df_chart,
@@ -356,4 +357,63 @@ def bk_totaltests(model_dict):
                           title=model_dict['region_name'], subtitle='COVID-19 Tests Per Day',
                           bar2_series=model_dict['df_hist']['cases_daily'], bar2_name='Positive Tests'
                           )
+    return p
+
+def bk_detection_rt(df_agg, model_dict):
+    df_chart = model_dict['df_hist']['cases_daily'].rolling(7).mean().div(df_agg['exposed_daily']).dropna()
+    df_chart = df_chart.reset_index()
+    df_chart.columns = ['dt','detection_rt']
+    p = figure(x_axis_type="datetime",
+               tools='pan,wheel_zoom,box_zoom,zoom_in,zoom_out,reset,save')
+    p = bk_title(p, title=model_dict['region_name'], subtitle='COVID-19 Daily Infection Detection Rate')
+
+    p.yaxis.formatter = NumeralTickFormatter(format="0%")
+
+    p.line(x='dt', y='detection_rt', source=df_chart, width=4, legend_label='Daily Infection Detection Rate')
+
+    p.add_tools(HoverTool(
+        tooltips=[
+            ('Date', '@dt{%F}'),
+            ('Detection Rate', '@detection_rt')
+        ],
+        formatters={'@dt': 'datetime'}
+    ))
+
+    return p
+
+def bk_googmvmt(model_dict):
+    df_chart = model_dict['df_mvmt']
+    col_names = ['retail_and_recreation_percent_change_from_baseline',
+         'grocery_and_pharmacy_percent_change_from_baseline',
+         'parks_percent_change_from_baseline',
+         'transit_stations_percent_change_from_baseline',
+         'workplaces_percent_change_from_baseline',
+         'residential_percent_change_from_baseline']
+    df_chart = df_chart[col_names]
+    df_chart = df_chart.interpolate(limit_area='inside').rolling(7).mean().div(100.0).dropna()
+    df_chart = df_chart.reset_index()
+
+    labels = [x[:-29].title().replace('_', ' ') for x in col_names]
+    colors = ['#008fd5', '#fc4f30', '#e5ae38', '#6d904f', '#8b8b8b', '#810f7c']
+
+    p = figure(x_axis_type="datetime",
+               tools='pan,wheel_zoom,box_zoom,zoom_in,zoom_out,reset,save')
+    p = bk_title(p, title=model_dict['region_name'], subtitle='Google Movement Data (Rolling 7-day Average)')
+
+    p.yaxis.formatter = NumeralTickFormatter(format="0%")
+
+    for colidx in range(len(col_names)):
+        line_name = labels[colidx]
+        p.line(x='dt', y=col_names[colidx], source=df_chart, width=4, legend_label=line_name,
+               name=line_name, color=colors[colidx])
+
+    p.add_tools(HoverTool(
+        tooltips=[
+            ('Date', '@dt{%F}'),
+            ('Name', '$name'),
+            ('Value', '@$name')
+        ],
+        formatters={'@dt': 'datetime'}
+    ))
+
     return p

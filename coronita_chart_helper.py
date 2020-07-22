@@ -8,13 +8,11 @@ from coronita_model_helper import *
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 
-plt.style.use('fivethirtyeight')
+# plt.style.use('fivethirtyeight')
+# personalsitestyle = 'fivethirtyeight'
+# covidoutlookstyle = 'ggplot'
 
 
-def footnote_str_maker():
-    footnote_str = 'Author: Michael Donnelly | twtr: @donnellymjd | www.michaeldonnel.ly\nChart created on {}'.format(
-        pd.Timestamp.today().strftime("%d %b, %Y at %I:%M %p"))
-    return footnote_str
 
 def add_event_lines(ax, df_interventions):
     curr_xmin, curr_xmax = ax.get_xlim()
@@ -55,7 +53,7 @@ def add_event_lines(ax, df_interventions):
 def bar_and_line_chart(bar_series, bar_name='', bar_color='#008fd5',
                        line_series = False, line_name='', line_color='#fc4f30',
                        chart_title='', yformat='{:.1%}',
-                       bar2_series = None, bar2_name='', bar2_color='#e5ae38'):
+                       bar2_series = None, bar2_name='', bar2_color='#e5ae38', footnote_str=''):
     fig, ax = plt.subplots(figsize=(14, 8))
     ax.bar(bar_series.index, bar_series, color=bar_color, label=bar_name)
     if isinstance(bar2_series, pd.Series):
@@ -79,11 +77,10 @@ def bar_and_line_chart(bar_series, bar_name='', bar_color='#008fd5',
     ax.legend(title='Legend', handles=handles[::-1], labels=labels[::-1])
 
     
-    plt.annotate(footnote_str_maker(),
+    plt.annotate(footnote_str,
                  (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
 
     return ax
-
 
 def param_str_maker(model_dict):
     param_dict = {}
@@ -117,12 +114,17 @@ def param_str_maker(model_dict):
                            ))
     return param_str
 
-def ch_exposed_infectious(df_agg, model_dict, param_str, chart_title=""):
-    plt.style.use('fivethirtyeight')
+
+### SINGLE REGION CHARTS ###
+def ch_exposed_infectious(model_dict):
+
+    param_str = param_str_maker(model_dict)
+    df_agg = model_dict['df_agg']
+
     df_chart = df_agg[['exposed', 'infectious']].dropna(how='all')
     df_chart = df_chart.clip(lower=0)
 
-    ax = df_chart.plot.area(figsize=[14, 8], title='Simultaneous Infections Forecast\n'+chart_title,
+    ax = df_chart.plot.area(figsize=[14, 8], title='Simultaneous Infections Forecast\n'+model_dict['chart_title'],
                             legend=True, color=['#e5ae38', '#fc4f30'])
     ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0f}'))
 
@@ -152,18 +154,20 @@ def ch_exposed_infectious(df_agg, model_dict, param_str, chart_title=""):
 
     ax.set_xlabel('')
     
-    plt.annotate(footnote_str_maker(),
+    plt.annotate(model_dict['footnote_str'],
                  (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
     return ax
 
+def ch_cumul_infections(model_dict):
 
-def ch_cumul_infections(df_agg, model_dict, param_str, chart_title=""):
-    plt.style.use('fivethirtyeight')
+    param_str = param_str_maker(model_dict)
+    df_agg = model_dict['df_agg']
+
     df_chart = df_agg[['exposed', 'infectious', 'recovered', 'hospitalized', 'deaths']].sum(axis=1).dropna(how='all')
     df_chart = df_chart.clip(lower=0)
     df_chart = df_chart.iloc[8:]
 
-    ax = df_chart.plot(figsize=[14, 8], title='Cumulative Infections Forecast\n'+chart_title,
+    ax = df_chart.plot(figsize=[14, 8], title='Cumulative Infections Forecast\n'+model_dict['chart_title'],
                        legend=True, label='Forecast Cumulative Infections',
                        color=['black'])
     ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0f}'))
@@ -177,16 +181,18 @@ def ch_cumul_infections(df_agg, model_dict, param_str, chart_title=""):
             verticalalignment='bottom', bbox={'ec': 'black', 'lw': 1})
     ax.set_xlabel('')
     
-    plt.annotate(footnote_str_maker(),
+    plt.annotate(model_dict['footnote_str'],
                  (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
     return ax
 
+def ch_daily_exposures(model_dict):
 
-def ch_daily_exposures(df_agg, model_dict, param_str, chart_title=""):
-    plt.style.use('fivethirtyeight')
+    param_str = param_str_maker(model_dict)
+    df_agg = model_dict['df_agg']
+
     df_chart = df_agg['exposed_daily'].dropna(how='all')
 
-    ax = df_chart.plot(figsize=[14, 8], title='Daily Exposures Forecast\n'+chart_title,
+    ax = df_chart.plot(figsize=[14, 8], title='Daily Exposures Forecast\n'+model_dict['chart_title'],
                        legend=True, color=['#e5ae38'],
                        label='Forecast Daily New Infections (Exposed)')
     ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0f}'))
@@ -200,19 +206,21 @@ def ch_daily_exposures(df_agg, model_dict, param_str, chart_title=""):
             verticalalignment='bottom', bbox={'ec': 'black', 'lw': 1})
     ax.set_xlabel('')
     
-    plt.annotate(footnote_str_maker(),
+    plt.annotate(model_dict['footnote_str'],
                  (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
     return ax
 
+def ch_hosp(model_dict):
+    param_str = param_str_maker(model_dict)
+    df_agg = model_dict['df_agg']
 
-def ch_hosp(df_agg, model_dict, param_str, chart_title=""):
     df_chart = df_agg[['hospitalized', 'icu', 'vent', 'deaths']].dropna(how='all').copy()
     df_chart = df_chart.rename(columns={'hospitalized':'Forecast Concurrent Hospitalizations',
                                         'icu':'Forecast ICU Cases',
                                         'vent':'Forecast Ventilations',
                                         'deaths':'Forecast Cumulative Deaths'})
 
-    ax = df_chart.plot(figsize=[14, 8], title='Hospitalization and Deaths Forecast\n'+chart_title,
+    ax = df_chart.plot(figsize=[14, 8], title='Hospitalization and Deaths Forecast\n'+model_dict['chart_title'],
                        color=['#6d904f', '#8b8b8b', '#810f7c', '#fc4f30'],
                        label=['Forecast Concurrent Hospitalizations',
                               'Forecast ICU Cases',
@@ -233,15 +241,17 @@ def ch_hosp(df_agg, model_dict, param_str, chart_title=""):
             verticalalignment='bottom', bbox={'ec': 'black', 'lw': 1})
     ax.set_xlabel('')
     
-    plt.annotate(footnote_str_maker(),
+    plt.annotate(model_dict['footnote_str'],
                  (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
     return ax
-    
 
-def ch_hosp_admits(df_agg, model_dict, param_str, chart_title=""):
+def ch_hosp_admits(model_dict):
+    param_str = param_str_maker(model_dict)
+    df_agg = model_dict['df_agg']
+
     df_chart = df_agg['hosp_admits'].dropna(how='all')
 
-    ax = df_chart.plot(figsize=[14, 8], title='Daily Hospital Admissions Forecast\n'+chart_title,
+    ax = df_chart.plot(figsize=[14, 8], title='Daily Hospital Admissions Forecast\n'+model_dict['chart_title'],
                        label='Forecast Hospital Admissions',
                        color='#6d904f')
     _ = ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0f}'))
@@ -260,15 +270,17 @@ def ch_hosp_admits(df_agg, model_dict, param_str, chart_title=""):
             verticalalignment='bottom', bbox={'ec': 'black', 'lw': 1})
     ax.set_xlabel('')
     
-    plt.annotate(footnote_str_maker(),
+    plt.annotate(model_dict['footnote_str'],
                  (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
     return ax
 
+def ch_daily_deaths(model_dict):
+    param_str = param_str_maker(model_dict)
+    df_agg = model_dict['df_agg']
 
-def ch_daily_deaths(df_agg, model_dict, param_str, chart_title=""):
     df_chart = df_agg['deaths'].diff().dropna(how='all')
 
-    ax = df_chart.plot(figsize=[14, 8], title='Daily Deaths Forecast\n'+chart_title,
+    ax = df_chart.plot(figsize=[14, 8], title='Daily Deaths Forecast\n'+model_dict['chart_title'],
                        label='Forecast Daily Deaths',
                        color='#fc4f30')
 
@@ -288,12 +300,14 @@ def ch_daily_deaths(df_agg, model_dict, param_str, chart_title=""):
             verticalalignment='bottom', bbox={'ec': 'black', 'lw': 1})
     ax.set_xlabel('')
     
-    plt.annotate(footnote_str_maker(),
+    plt.annotate(model_dict['footnote_str'],
                  (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
     return ax
 
+def ch_doubling_rt(model_dict):
+    param_str = param_str_maker(model_dict)
+    df_agg = model_dict['df_agg']
 
-def ch_doubling_rt(df_agg, model_dict, param_str, chart_title=""):
     ## DOUBLING RATE CHART
     df_chart = np.log(2) / df_agg[['exposed_daily', 'hospitalized', 'deaths']].pct_change().rolling(7, center=True).mean().dropna(how='all')
     df_chart = df_chart.mask(df_chart < 0)
@@ -302,7 +316,7 @@ def ch_doubling_rt(df_agg, model_dict, param_str, chart_title=""):
                                         'deaths':'Daily Deaths'})
     df_chart = df_chart.iloc[8:]
 
-    ax = df_chart.plot(figsize=[14, 8], title='Doubling Rate Forecast\n' + chart_title,
+    ax = df_chart.plot(figsize=[14, 8], title='Doubling Rate Forecast\n' + model_dict['chart_title'],
                        color=['#e5ae38', '#6d904f', '#fc4f30'])
 
     if 'cases_daily' in model_dict['df_hist'].columns:
@@ -328,12 +342,14 @@ def ch_doubling_rt(df_agg, model_dict, param_str, chart_title=""):
     ax.set_ylabel('Days til Doubling')
     ax.set_ylim(1, 1000)
     
-    plt.annotate(footnote_str_maker(),
+    plt.annotate(model_dict['footnote_str'],
                  (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
     return ax
 
+def ch_population_share(model_dict):
+    param_str = param_str_maker(model_dict)
+    df_agg = model_dict['df_agg']
 
-def ch_population_share(df_agg, model_dict, param_str, chart_title=""):
     df_chart = df_agg[['susceptible', 'deaths', 'exposed', 'hospitalized', 'infectious', 'recovered']].dropna(how='all')
     df_chart = df_chart.rename(columns={'susceptible':'Forecast Susceptible Population',
                                         'exposed':'Forecast Exposures',
@@ -344,7 +360,7 @@ def ch_population_share(df_agg, model_dict, param_str, chart_title=""):
     df_chart = df_chart.clip(lower=0)
     df_chart = df_chart.iloc[8:]
 
-    ax = df_chart.plot.area(figsize=[14, 8], title='Population Overview Forecast\n'+chart_title)
+    ax = df_chart.plot.area(figsize=[14, 8], title='Population Overview Forecast\n'+model_dict['chart_title'])
     ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0f}'))
     plt.legend(title='Legend', loc='upper left', bbox_to_anchor=(1.07, 0.95), ncol=1)
     ax2 = ax.twinx()
@@ -366,12 +382,13 @@ def ch_population_share(df_agg, model_dict, param_str, chart_title=""):
             verticalalignment='bottom', bbox={'ec': 'black', 'lw': 1})
     ax.set_xlabel('')
     
-    plt.annotate(footnote_str_maker(),
+    plt.annotate(model_dict['footnote_str'],
                  (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
     return ax
 
-def ch_rts(model_dict, param_str, chart_title=""):
-    plt.style.use('fivethirtyeight')
+def ch_rts(model_dict):
+    param_str = param_str_maker(model_dict)
+
     # solo_rts = [x for x in model_dict['df_rts'].columns if x in
     #             ['rt_deaths_daily', 'rt_hosp_concur', 'rt_hosp_admits', 'rt_pos_test_share_daily', 'rt_cases_daily']]
 
@@ -381,7 +398,7 @@ def ch_rts(model_dict, param_str, chart_title=""):
                 ['test_share', 'deaths_daily', 'hosp_concur', 'hosp_admits',
                  'cases_daily'] ]
     ax = df_just_rts[solo_rts].dropna(how='all').plot(figsize=[14, 8], alpha=0.2,
-                                                               title=r'Reproduction Rate ($R_{t}$) Estimates'+'\n'+chart_title,
+                                                               title=r'Reproduction Rate ($R_{t}$) Estimates'+'\n'+model_dict['chart_title'],
                                                                legend=True)
 
     df_just_rts['weighted_average'].dropna().plot(ax=ax, legend=True)
@@ -394,17 +411,19 @@ def ch_rts(model_dict, param_str, chart_title=""):
             verticalalignment='bottom', bbox={'ec': 'black', 'lw': 1})
     ax.set_xlabel('')
     
-    plt.annotate(footnote_str_maker(),
+    plt.annotate(model_dict['footnote_str'],
                  (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
     return ax
 
-def ch_rt_confid(df_rt, param_str, chart_title=""):
+def ch_rt_confid(model_dict):
+    df_rt = model_dict['df_rts_conf'][['weighted_average']].unstack('metric')
+    param_str = param_str_maker(model_dict)
     rt_name = df_rt.columns.levels[0][0]
     df_rt = df_rt[rt_name].dropna(how='all')
 
     # lower68, upper68, lower95, upper95 = df_rt.iloc[:,1:5]
     ax = df_rt['rt'].dropna(how='all').plot(figsize=[14, 8],
-                                     title=r'Reproduction Rate ($R_{t}$) Estimate'+'\n'+chart_title,
+                                     title=r'Reproduction Rate ($R_{t}$) Estimate'+'\n'+model_dict['chart_title'],
                                      legend=True,
                                             label='$R_t$: {}'.format(rt_name))
     ci68 = plt.fill_between(df_rt['rt_u68'].index, df_rt['rt_u68'], df_rt['rt_l68'],
@@ -423,10 +442,163 @@ def ch_rt_confid(df_rt, param_str, chart_title=""):
             verticalalignment='bottom', bbox={'ec': 'black', 'lw': 1})
     ax.set_xlabel('')
     
-    plt.annotate(footnote_str_maker(),
+    plt.annotate(model_dict['footnote_str'],
                  (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
 
     return ax
+
+def ch_totaltests(model_dict):
+    ax = bar_and_line_chart(bar_series=model_dict['df_hist']['pos_neg_tests_daily'].dropna(how='all'),
+                       bar_name='# of Negative Tests',
+                       line_series=model_dict['df_hist']['pos_neg_tests_daily'].rolling(7, min_periods=1).mean(),
+                       line_name='7-Day Rolling Average', yformat='{:0,.0f}',
+                       chart_title='{}: Total COVID-19 Tests Per Day'.format(model_dict['region_name']),
+                       bar2_series=model_dict['df_hist']['cases_daily'], bar2_name='# of Positive Tests',
+                            footnote_str=model_dict['footnote_str']
+                       )
+    return ax
+
+def ch_positivetests(model_dict):
+    ax = bar_and_line_chart(bar_series=model_dict['df_hist']['cases_daily'].dropna(how='all'),
+                       bar_name='# of Positive Tests', bar_color='#e5ae38',
+                       line_series=model_dict['df_hist']['cases_daily'].rolling(7, min_periods=1).mean(),
+                       line_name='7-Day Rolling Average', yformat='{:0,.0f}',
+                       chart_title='{}: Positive COVID-19 Tests Per Day'.format(model_dict['region_name']),
+                            footnote_str=model_dict['footnote_str']
+                       )
+    return ax
+
+def ch_postestshare(model_dict):
+    df_chart = model_dict['df_hist'][['cases_daily', 'pos_neg_tests_daily']].clip(lower=0)
+    df_chart = df_chart.div(df_chart['pos_neg_tests_daily'], axis=0).dropna(how='all')
+
+    ax = df_chart.plot(kind='area', stacked=True,
+                       title='{}: COVID-19 Positivity Rate'.format(model_dict['region_name']),
+                       figsize=[14, 8],
+                       color=['#e5ae38', '#008fd5'])
+    df_chart['sevendayavg'] = df_chart['cases_daily'].mask(df_chart['cases_daily']>=1.0
+                                                           ).rolling(7, min_periods=1).mean()
+    df_chart['sevendayavg'].plot(ax=ax, linestyle='-', color='#fc4f30')
+    ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0%}'))
+    plt.legend(title='Legend', bbox_to_anchor=(1.07, 0.95), ncol=1,
+               labels=['% Positive Tests', '% Negative Tests', '7-Day Rolling Average - Positivity Rate'])
+    ax.set_ylim(0, min(1, df_chart['sevendayavg'].max() * 1.25))
+    ax.set_xlabel('')
+
+    plt.annotate(model_dict['footnote_str'],
+                 (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
+    return ax
+
+def ch_googmvmt(model_dict):
+    df_chart = model_dict['df_mvmt']
+    df_chart = df_chart[['retail_and_recreation_percent_change_from_baseline',
+         'grocery_and_pharmacy_percent_change_from_baseline',
+         'parks_percent_change_from_baseline',
+         'transit_stations_percent_change_from_baseline',
+         'workplaces_percent_change_from_baseline',
+         'residential_percent_change_from_baseline']]
+    df_chart = df_chart.interpolate(limit_area='inside').rolling(7).mean().div(100.0)
+
+    labels = [x[:-29].title().replace('_', ' ') for x in df_chart.columns]
+
+    ax = df_chart.plot(title='{}: Google Movement Data\nRolling 7-day Average'.format(model_dict['region_name']),
+                       figsize=[14, 8], )
+    ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0%}'))
+    plt.legend(title='Percent Change from Baseline', bbox_to_anchor=(1.07, 0.95), ncol=1, labels=labels)
+    ax.set_xlabel('')
+
+    plt.annotate(model_dict['footnote_str'],
+                 (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
+    return ax
+
+def ch_detection_rt(model_dict):
+    param_str = param_str_maker(model_dict)
+    df_agg = model_dict['df_agg']
+
+    df_chart = model_dict['df_hist']['cases_daily'].rolling(7).mean().div(df_agg['exposed_daily']).dropna()
+
+    ax = df_chart.plot(
+        figsize=[14, 8],
+        title='COVID-19 Daily Infection Detection Rate\n' + model_dict['chart_title'],
+        legend=False
+    )
+    ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0%}'))
+
+    ax.text(1.08, 0.05, param_str, transform=ax.transAxes,
+            verticalalignment='bottom', bbox={'ec': 'black', 'lw': 1})
+    ax.set_xlabel('')
+
+    plt.annotate(model_dict['footnote_str'],
+                 (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
+
+    return ax
+
+### MULTI-REGION CHARTS ###
+def ch_rt_summary(df_wavg_rt_conf_allregs):
+    import plotly.express as px
+
+    df_chart = df_wavg_rt_conf_allregs.unstack('metric').apply(
+        lambda x: x.loc[x.last_valid_index()]).sort_values(ascending=False).unstack('metric')
+    df_chart['e'] = df_chart.rt_u68 - df_chart.rt
+    df_chart = df_chart.round(2)
+    df_chart = df_chart.sort_values(by='rt').reset_index().rename(columns={'index': 'state'})
+
+    fig = px.scatter(df_chart,
+                     y="state", x="rt",
+                     error_x="e", color='rt',
+                     color_continuous_scale=px.colors.diverging.PiYG_r,
+                     color_continuous_midpoint=1.0,
+                     height=1000
+                     )
+
+    fig.update_traces(mode='markers+text',
+                      marker_line_width=1,
+                      marker_size=13,
+                      text=pd.Series(df_chart['state']).apply(
+                          lambda
+                              x: "<a href='http://www.michaeldonnel.ly/covid19/datacenter/{0}/' style='color: black'>{0}</a>".format(
+                              x)).to_list(),
+                      textfont=dict(size=8)
+                      )
+    fig.update_layout(title='COVID-19: Current Estimated Reproduction Factor',
+                      yaxis=dict(fixedrange=True),
+                      xaxis=dict(fixedrange=True)
+                      )
+    fig.update_xaxes(title_text='Effective Reproduction Factor')
+    fig.update_yaxes(title_text='State')
+    return fig
+
+def ch_exposure_prob(df_fore_allstates, s_pop):
+    infectious_contact_prob = df_fore_allstates.loc[
+        pd.Timestamp.today().date()].loc[['exposed', 'infectious']].sum().div(
+        s_pop).sort_values()
+
+    colorbar_name = 'Probability'
+
+    df_chart = (1 - (1 - infectious_contact_prob) ** 10).reset_index()
+    df_chart.columns = ['state', colorbar_name]
+    df_chart[colorbar_name] = df_chart[colorbar_name].mul(100).round(1)
+
+    import plotly.express as px
+
+    chart_title = 'US: Current Model-Estimated COVID-19 Exposure Probability Per 10 Contacts'
+
+    fig = px.choropleth(df_chart[['state', colorbar_name]],
+                        locations=df_chart['state'],
+                        locationmode="USA-states",
+                        color=colorbar_name,
+                        color_continuous_scale="BuPu",
+                        title=chart_title,
+                        projection='albers usa',
+                        )
+    fig.update_layout(autosize=True,
+            margin=dict(l=10,r=10,b=100,t=100, pad=0),
+        coloraxis_colorbar=dict(len=0.75,thickness=30,
+                                yanchor="top", y=1,
+                                ticks="outside", ticksuffix="%")
+        )
+
+    return fig
 
 def ch_statemap(df_chart, region_name, scope=['USA']):
     import plotly.express as px
@@ -504,94 +676,12 @@ def ch_statemap_casechange(df_chart, region_name, scale_max, counties, fitbounds
 
     return fig
 
-def ch_totaltests(model_dict):
-    ax = bar_and_line_chart(bar_series=model_dict['df_hist']['pos_neg_tests_daily'].dropna(how='all'),
-                       bar_name='# of Negative Tests',
-                       line_series=model_dict['df_hist']['pos_neg_tests_daily'].rolling(7, min_periods=1).mean(),
-                       line_name='7-Day Rolling Average', yformat='{:0,.0f}',
-                       chart_title='{}: Total COVID-19 Tests Per Day'.format(model_dict['region_name']),
-                       bar2_series=model_dict['df_hist']['cases_daily'], bar2_name='# of Positive Tests'
-                       )
-    return ax
-
-def ch_positivetests(model_dict):
-    ax = bar_and_line_chart(bar_series=model_dict['df_hist']['cases_daily'].dropna(how='all'),
-                       bar_name='# of Positive Tests', bar_color='#e5ae38',
-                       line_series=model_dict['df_hist']['cases_daily'].rolling(7, min_periods=1).mean(),
-                       line_name='7-Day Rolling Average', yformat='{:0,.0f}',
-                       chart_title='{}: Positive COVID-19 Tests Per Day'.format(model_dict['region_name'])
-                       )
-    return ax
-
-def ch_postestshare(model_dict):
-    df_chart = model_dict['df_hist'][['cases_daily', 'pos_neg_tests_daily']].clip(lower=0)
-    df_chart = df_chart.div(df_chart['pos_neg_tests_daily'], axis=0).dropna(how='all')
-
-    ax = df_chart.plot(kind='area', stacked=True,
-                       title='{}: COVID-19 Positivity Rate'.format(model_dict['region_name']),
-                       figsize=[14, 8],
-                       color=['#e5ae38', '#008fd5'])
-    df_chart['sevendayavg'] = df_chart['cases_daily'].mask(df_chart['cases_daily']>=1.0
-                                                           ).rolling(7, min_periods=1).mean()
-    df_chart['sevendayavg'].plot(ax=ax, linestyle='-', color='#fc4f30')
-    ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0%}'))
-    plt.legend(title='Legend', bbox_to_anchor=(1.07, 0.95), ncol=1,
-               labels=['% Positive Tests', '% Negative Tests', '7-Day Rolling Average - Positivity Rate'])
-    ax.set_ylim(0, min(1, df_chart['sevendayavg'].max() * 1.25))
-    ax.set_xlabel('')
-
-    plt.annotate(footnote_str_maker(),
-                 (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
-    return ax
-
-def ch_googmvmt(model_dict):
-    df_chart = model_dict['df_mvmt']
-    df_chart = df_chart[['retail_and_recreation_percent_change_from_baseline',
-         'grocery_and_pharmacy_percent_change_from_baseline',
-         'parks_percent_change_from_baseline',
-         'transit_stations_percent_change_from_baseline',
-         'workplaces_percent_change_from_baseline',
-         'residential_percent_change_from_baseline']]
-    df_chart = df_chart.interpolate(limit_area='inside').rolling(7).mean().div(100.0)
-
-    labels = [x[:-29].title().replace('_', ' ') for x in df_chart.columns]
-
-    ax = df_chart.plot(title='{}: Google Movement Data\nRolling 7-day Average'.format(model_dict['region_name']),
-                       figsize=[14, 8], )
-    ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0%}'))
-    plt.legend(title='Percent Change from Baseline', bbox_to_anchor=(1.07, 0.95), ncol=1, labels=labels)
-    ax.set_xlabel('')
-
-    plt.annotate(footnote_str_maker(),
-                 (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
-    return ax
-
-def ch_detection_rt(df_agg, model_dict, param_str, chart_title=""):
-    df_chart = model_dict['df_hist']['cases_daily'].rolling(7).mean().div(df_agg['exposed_daily']).dropna()
-
-    ax = df_chart.plot(
-        figsize=[14, 8],
-        title='COVID-19 Daily Infection Detection Rate\n' + chart_title,
-        legend=False
-    )
-    ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0%}'))
-
-    ax.text(1.08, 0.05, param_str, transform=ax.transAxes,
-            verticalalignment='bottom', bbox={'ec': 'black', 'lw': 1})
-    ax.set_xlabel('')
-
-    plt.annotate(footnote_str_maker(),
-                 (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
-
-    return ax
-
-
-
-def run_all_charts(model_dict, df_agg, scenario_name='', pdf_out=False, show_charts=True, pub2web=False):
-    chart_title = "{0}: {1} Scenario".format(
+def run_all_charts(model_dict, scenario_name='', pdf_out=False, show_charts=True, pub2web=False):
+    model_dict['chart_title'] = "{0}: {1} Scenario".format(
         model_dict['region_name'], scenario_name)
 
     param_str = param_str_maker(model_dict)
+    df_agg = model_dict['df_agg']
     event_lines = model_dict['df_interventions']
 
     if pdf_out and type(pdf_out) == str:
@@ -601,138 +691,154 @@ def run_all_charts(model_dict, df_agg, scenario_name='', pdf_out=False, show_cha
         from matplotlib.backends.backend_pdf import PdfPages
         pdf_obj = pdf_out
 
-    ax = ch_rt_confid(model_dict['df_rts_conf'][['weighted_average']].unstack('metric'), param_str, model_dict['region_name'])
+    thischart = 'ch_rt_confid'
+    ax = ch_rt_confid(model_dict)
     if event_lines.shape[0] > 0: add_event_lines(ax, event_lines)
     if pdf_out: pdf_obj.savefig(bbox_inches='tight', pad_inches=1, optimize=True, facecolor='white')
-    if pub2web: plt.savefig('../donnellymjd.github.io/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], 'ch_rt_confid'), bbox_inches='tight')
+    if pub2web: plt.style.use(personalsitestyle); plt.savefig('../donnellymjd.github.io/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], thischart), bbox_inches='tight'); plt.style.use(covidoutlookstyle); plt.savefig('../COVIDoutlook/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], thischart), bbox_inches='tight')
     if show_charts: 
         plt.show()
     else: 
         plt.close()
 
-    ax = ch_rts(model_dict, param_str, chart_title)
+    thischart = 'ch_rts'
+    ax = ch_rts(model_dict)
     if event_lines.shape[0] > 0: add_event_lines(ax, event_lines)
     if pdf_out: pdf_obj.savefig(bbox_inches='tight', pad_inches=1, optimize=True, facecolor='white')
-    if pub2web: plt.savefig('../donnellymjd.github.io/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], 'ch_rts'), bbox_inches='tight')
+    if pub2web: plt.style.use(personalsitestyle); plt.savefig('../donnellymjd.github.io/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], thischart), bbox_inches='tight'); plt.style.use(covidoutlookstyle); plt.savefig('../COVIDoutlook/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], thischart), bbox_inches='tight')
     if show_charts:
         plt.show()
     else:
         plt.close()
 
     if model_dict['df_mvmt'].shape[0] > 0:
+        thischart = 'ch_googmvmt'
         ax = ch_googmvmt(model_dict)
         if event_lines.shape[0] > 0: add_event_lines(ax, event_lines)
         if pdf_out: pdf_obj.savefig(bbox_inches='tight', pad_inches=1, optimize=True, facecolor='white')
-        if pub2web: plt.savefig('../donnellymjd.github.io/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], 'ch_googmvmt'), bbox_inches='tight')
+        if pub2web: plt.style.use(personalsitestyle); plt.savefig('../donnellymjd.github.io/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], thischart), bbox_inches='tight'); plt.style.use(covidoutlookstyle); plt.savefig('../COVIDoutlook/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], thischart), bbox_inches='tight')
         if show_charts:
             plt.show()
         else:
             plt.close()
 
+    thischart = 'ch_exposed_infectious'
     ax = ch_exposed_infectious(df_agg, model_dict, param_str, chart_title)
     # if event_lines.shape[0] > 0: add_event_lines(ax, event_lines)
     if pdf_out: pdf_obj.savefig(bbox_inches='tight', pad_inches=1, optimize=True, facecolor='white')
-    if pub2web: plt.savefig('../donnellymjd.github.io/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], 'ch_exposed_infectious'), bbox_inches='tight')
+    if pub2web: plt.style.use(personalsitestyle); plt.savefig('../donnellymjd.github.io/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], thischart), bbox_inches='tight'); plt.style.use(covidoutlookstyle); plt.savefig('../COVIDoutlook/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], thischart), bbox_inches='tight')
     if show_charts: 
         plt.show()
     else: 
         plt.close()
 
+    thischart = 'ch_hosp'
     ax = ch_hosp(df_agg, model_dict, param_str, chart_title)
     # if event_lines.shape[0] > 0: add_event_lines(ax, event_lines)
     if pdf_out: pdf_obj.savefig(bbox_inches='tight', pad_inches=1, optimize=True, facecolor='white')
-    if pub2web: plt.savefig('../donnellymjd.github.io/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], 'ch_hosp'), bbox_inches='tight')
+    if pub2web: plt.style.use(personalsitestyle); plt.savefig('../donnellymjd.github.io/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], thischart), bbox_inches='tight'); plt.style.use(covidoutlookstyle); plt.savefig('../COVIDoutlook/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], thischart), bbox_inches='tight')
     if show_charts: 
         plt.show()
     else: 
         plt.close()
     plt.close()
 
+    thischart = 'ch_population_share'
     ax = ch_population_share(df_agg, model_dict, param_str, chart_title)
     # if event_lines.shape[0] > 0: add_event_lines(ax, event_lines)
     if pdf_out: pdf_obj.savefig(bbox_inches='tight', pad_inches=1, optimize=True, facecolor='white')
-    if pub2web: plt.savefig('../donnellymjd.github.io/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], 'ch_population_share'), bbox_inches='tight')
+    if pub2web: plt.style.use(personalsitestyle); plt.savefig('../donnellymjd.github.io/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], thischart), bbox_inches='tight'); plt.style.use(covidoutlookstyle); plt.savefig('../COVIDoutlook/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], thischart), bbox_inches='tight')
     if show_charts: 
         plt.show()
     else: 
         plt.close()
 
+    thischart = 'ch_cumul_infections'
     ax = ch_cumul_infections(df_agg, model_dict, param_str, chart_title)
     # if event_lines.shape[0] > 0: add_event_lines(ax, event_lines)
     if pdf_out: pdf_obj.savefig(bbox_inches='tight', pad_inches=1, optimize=True, facecolor='white')
-    if pub2web: plt.savefig('../donnellymjd.github.io/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], 'ch_cumul_infections'), bbox_inches='tight')
+    if pub2web: plt.style.use(personalsitestyle); plt.savefig('../donnellymjd.github.io/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], thischart), bbox_inches='tight'); plt.style.use(covidoutlookstyle); plt.savefig('../COVIDoutlook/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], thischart), bbox_inches='tight')
     if show_charts: 
         plt.show()
     else: 
         plt.close()
 
+    thischart = 'ch_daily_exposures'
     ax = ch_daily_exposures(df_agg, model_dict, param_str, chart_title)
     # if event_lines.shape[0] > 0: add_event_lines(ax, event_lines)
     if pdf_out: pdf_obj.savefig(bbox_inches='tight', pad_inches=1, optimize=True, facecolor='white')
-    if pub2web: plt.savefig('../donnellymjd.github.io/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], 'ch_daily_exposures'), bbox_inches='tight')
+    if pub2web: plt.style.use(personalsitestyle); plt.savefig('../donnellymjd.github.io/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], thischart), bbox_inches='tight'); plt.style.use(covidoutlookstyle); plt.savefig('../COVIDoutlook/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], thischart), bbox_inches='tight')
     if show_charts: 
         plt.show()
     else: 
         plt.close()
 
+    thischart = 'ch_hosp_admits'
     ax = ch_hosp_admits(df_agg, model_dict, param_str, chart_title)
     # if event_lines.shape[0] > 0: add_event_lines(ax, event_lines)
     if pdf_out: pdf_obj.savefig(bbox_inches='tight', pad_inches=1, optimize=True, facecolor='white')
-    if pub2web: plt.savefig('../donnellymjd.github.io/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], 'ch_hosp_admits'), bbox_inches='tight')
+    if pub2web: plt.style.use(personalsitestyle); plt.savefig('../donnellymjd.github.io/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], thischart), bbox_inches='tight'); plt.style.use(covidoutlookstyle); plt.savefig('../COVIDoutlook/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], thischart), bbox_inches='tight')
     if show_charts: 
         plt.show()
     else: 
         plt.close()
 
+    thischart = 'ch_daily_deaths'
     ax = ch_daily_deaths(df_agg, model_dict, param_str, chart_title)
     # if event_lines.shape[0] > 0: add_event_lines(ax, event_lines)
     if pdf_out: pdf_obj.savefig(bbox_inches='tight', pad_inches=1, optimize=True, facecolor='white')
-    if pub2web: plt.savefig('../donnellymjd.github.io/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], 'ch_daily_deaths'), bbox_inches='tight')
+    if pub2web: plt.style.use(personalsitestyle); plt.savefig('../donnellymjd.github.io/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], thischart), bbox_inches='tight'); plt.style.use(covidoutlookstyle); plt.savefig('../COVIDoutlook/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], thischart), bbox_inches='tight')
     if show_charts: 
         plt.show()
     else: 
         plt.close()
 
+    thischart = 'ch_detection_rt'
     ax = ch_detection_rt(df_agg, model_dict, param_str, chart_title)
     # if event_lines.shape[0] > 0: add_event_lines(ax, event_lines)
     if pdf_out: pdf_obj.savefig(bbox_inches='tight', pad_inches=1, optimize=True, facecolor='white')
-    if pub2web: plt.savefig('../donnellymjd.github.io/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], 'ch_detection_rt'), bbox_inches='tight')
+    if pub2web: plt.style.use(personalsitestyle); plt.savefig('../donnellymjd.github.io/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], thischart), bbox_inches='tight'); plt.style.use(covidoutlookstyle); plt.savefig('../COVIDoutlook/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], thischart), bbox_inches='tight')
     if show_charts:
         plt.show()
     else:
         plt.close()
 
+    thischart = 'ch_postestshare'
     ax = ch_postestshare(model_dict)
     # if event_lines.shape[0] > 0: add_event_lines(ax, event_lines)
     if pdf_out: pdf_obj.savefig(bbox_inches='tight', pad_inches=1, optimize=True, facecolor='white')
-    if pub2web: plt.savefig('../donnellymjd.github.io/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], 'ch_postestshare'), bbox_inches='tight')
+    if pub2web: plt.style.use(personalsitestyle); plt.savefig('../donnellymjd.github.io/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], thischart), bbox_inches='tight'); plt.style.use(covidoutlookstyle); plt.savefig('../COVIDoutlook/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], thischart), bbox_inches='tight')
     if show_charts:
         plt.show()
     else:
         plt.close()
 
+    thischart = 'ch_positivetests'
     ax = ch_positivetests(model_dict)
     # if event_lines.shape[0] > 0: add_event_lines(ax, event_lines)
     if pdf_out: pdf_obj.savefig(bbox_inches='tight', pad_inches=1, optimize=True, facecolor='white')
-    if pub2web: plt.savefig('../donnellymjd.github.io/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], 'ch_positivetests'), bbox_inches='tight')
+    if pub2web: plt.style.use(personalsitestyle); plt.savefig('../donnellymjd.github.io/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], thischart), bbox_inches='tight'); plt.style.use(covidoutlookstyle); plt.savefig('../COVIDoutlook/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], thischart), bbox_inches='tight')
     if show_charts:
         plt.show()
     else:
         plt.close()
 
+    thischart = 'ch_totaltests'
     ax = ch_totaltests(model_dict)
     # if event_lines.shape[0] > 0: add_event_lines(ax, event_lines)
     if pdf_out: pdf_obj.savefig(bbox_inches='tight', pad_inches=1, optimize=True, facecolor='white')
-    if pub2web: plt.savefig('../donnellymjd.github.io/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], 'ch_totaltests'), bbox_inches='tight')
+    if pub2web: plt.style.use(personalsitestyle); plt.savefig('../donnellymjd.github.io/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], thischart), bbox_inches='tight'); plt.style.use(covidoutlookstyle); plt.savefig('../COVIDoutlook/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], thischart), bbox_inches='tight')
     if show_charts:
         plt.show()
     else:
         plt.close()
 
+    thischart = 'ch_doubling_rt'
     ax = ch_doubling_rt(df_agg, model_dict, param_str, chart_title)
     # if event_lines.shape[0] > 0: add_event_lines(ax, event_lines)
     if pdf_out: pdf_obj.savefig(bbox_inches='tight', pad_inches=1, optimize=True, facecolor='white')
-    if pub2web: plt.savefig('../donnellymjd.github.io/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], 'ch_doubling_rt'), bbox_inches='tight')
+    if pub2web:
+        plt.style.use(personalsitestyle); plt.savefig('../donnellymjd.github.io/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], thischart), bbox_inches='tight'); plt.style.use(covidoutlookstyle); plt.savefig('../COVIDoutlook/assets/images/covid19/{}_{}.png'.format(model_dict['region_code'], thischart), bbox_inches='tight')
     if show_charts: 
         plt.show()
     else: 

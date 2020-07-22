@@ -221,7 +221,10 @@ def seir_model_cohort(start_dt, model_dict, exposed_0=100, infectious_0=100):
     exposed_daily = df_all_cohorts.stack().unstack(['metric'])[['exposed']].reset_index()
     df_agg['exposed_daily'] = exposed_daily[(exposed_daily.dt == exposed_daily.cohort_dt)].set_index(['dt'])['exposed']
 
-    return df_agg.dropna(), df_all_cohorts, model_dict
+    model_dict['df_agg'] = df_agg.dropna()
+    model_dict['df_all_cohorts'] = df_all_cohorts
+
+    return model_dict
 
 def model_find_start(this_guess, model_dict, exposed_0=None, infectious_0=None):
     from sklearn.metrics import mean_squared_error
@@ -241,7 +244,8 @@ def model_find_start(this_guess, model_dict, exposed_0=None, infectious_0=None):
     while change_in_error < 0:
         # print(this_guess)
         model_dict['d_to_forecast'] = (pd.Timestamp.today() - this_guess).days
-        df_agg, df_all_cohorts, _ = seir_model_cohort(this_guess, model_dict, exposed_0, infectious_0)
+        model_dict = seir_model_cohort(this_guess, model_dict, exposed_0, infectious_0)
+        df_agg = model_dict['df_agg']
 
         df_compare = pd.DataFrame()
 
@@ -271,9 +275,9 @@ def model_find_start(this_guess, model_dict, exposed_0=None, infectious_0=None):
 
     model_dict = orig_model_dict
     model_dict['d_to_forecast'] = (pd.Timestamp.today() - this_guess).days + model_dict['d_to_forecast']
-    df_agg, df_all_cohorts, model_dict = seir_model_cohort(rmses.idxmin(), model_dict, exposed_0, infectious_0)
+    model_dict = seir_model_cohort(rmses.idxmin(), model_dict, exposed_0, infectious_0)
     print('Best starting date: ',rmses.idxmin())
-    return df_agg, df_all_cohorts, model_dict
+    return model_dict
 
 def est_rt(df_input, lookback, d_infect, offset_days):
     _gamma = 1 / d_infect
