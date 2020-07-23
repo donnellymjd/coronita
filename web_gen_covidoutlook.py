@@ -343,9 +343,11 @@ for state_code in list(df_census.state.unique()) + ['US']:
     for ch_name, ch_fn in d_chart_fns.items():
         try:
             ax = ch_fn(model_dict)
-            plt.savefig('../COVIDoutlook/assets/images/covid19/{}_{}.png'.format(
-                model_dict['region_code'], ch_name), bbox_inches='tight')
+            filename = '../COVIDoutlook/assets/images/covid19/{}_{}.png'.format(
+                model_dict['region_code'], ch_name)
+            plt.savefig(filename, bbox_inches='tight')
             plt.close()
+            os.system('optipng {} &'.format(filename))
         except:
             print('Couldn\'t create {} {} chart.'.format(model_dict['region_code'], ch_name))
 

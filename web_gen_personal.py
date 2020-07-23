@@ -167,9 +167,11 @@ for state_code in list(df_census.state.unique()) + ['US']:
         try:
             ax = ch_fn(model_dict)
             pdf_obj.savefig(bbox_inches='tight', pad_inches=1, optimize=True, facecolor='white')
-            plt.savefig('../donnellymjd.github.io/assets/images/covid19/{}_{}.png'.format(
-                model_dict['region_code'], ch_name), bbox_inches='tight')
+            filename = '../donnellymjd.github.io/assets/images/covid19/{}_{}.png'.format(
+                model_dict['region_code'], ch_name)
+            plt.savefig(filename, bbox_inches='tight')
             plt.close()
+            os.system('optipng {} &'.format(filename))
         except:
             print('Couldn\'t create {} {} chart.'.format(model_dict['region_code'], ch_name))
 
