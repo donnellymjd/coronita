@@ -207,13 +207,17 @@ image: duotone-us.png
         {{ div[1] }}
     </div>
 </div>
+<hr>
 {% for chart in div[2:-1] %}
     <div class="w3-container">
         {{ chart }}
     </div>
+    <hr>
 {% endfor %}
 {{ exposure_prob }}
+<hr>
 {{ case_change }}
+<hr>
 <div class="w3-container">
     {{ div[-1] }}
 </div>

@@ -42,9 +42,9 @@ def bk_title(p, title="", subtitle=""):
 def bk_legend(p, location='center', orientation='horizontal', font_size=1.35):
     p.legend.title = 'Interactive Legend'
     p.legend.title_text_font_style = "bold"
-    p.legend.title_text_font_size = str(font_size*1.1)+'vw'
+    p.legend.title_text_font_size = '100%' #str(font_size*1.1)+'em'
     p.legend.title_text_color = "black"
-    p.legend.label_text_font_size = str(font_size)+'vw'
+    p.legend.label_text_font_size = '75%' #str(font_size)+'em'
     p.legend.glyph_height = 15
     p.legend.label_height = 8
     p.legend.glyph_width = 8
