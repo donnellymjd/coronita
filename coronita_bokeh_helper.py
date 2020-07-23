@@ -8,7 +8,7 @@ from bokeh.io import reset_output, output_notebook, curdoc, output_file, save
 from bokeh.themes import built_in_themes
 from bokeh.layouts import row, column, grid
 from bokeh.models import ColumnDataSource, NumeralTickFormatter, HoverTool, Label, LinearAxis, Range1d, \
-    Span, DatetimeTickFormatter, CustomJS, Select, Button, Patch, Legend, Div, Title
+    Span, DatetimeTickFormatter, CustomJS, Select, Button, Patch, Legend, Div, Title, FactorRange
 from bokeh.embed import components, autoload_static
 from bokeh.resources import INLINE, CDN
 
@@ -417,3 +417,106 @@ def bk_googmvmt(model_dict):
     ))
 
     return p
+
+def bk_compare_exposures(df_census, df_fore_allstates):
+    # df_chart = df_fore_allstates.stack().unstack('metric')['exposed_daily'].unstack(1)
+    s_pop = df_census.loc[(df_census.SUMLEV == 40)].set_index('state')['pop2019']
+    df_exposed_daily_per100k = df_fore_allstates.stack().unstack('metric')[
+        'exposed_daily'].unstack(1).div(s_pop).mul(1e5)
+    df_chart = df_exposed_daily_per100k
+    names_sub = df_chart.columns.to_list()
+    data = df_chart.reset_index()
+    source = ColumnDataSource(data)
+    # create CDS for filtered sources
+    state1 = 'NY'
+    filt_data1 = data[['dt', state1]].rename(columns={state1: 'cases'})
+    src2 = ColumnDataSource(filt_data1)
+
+    state2 = 'CA'
+    filt_data2 = data[['dt', state2]].rename(columns={state2: 'cases'})
+    src3 = ColumnDataSource(filt_data2)
+
+    p1 = figure(x_axis_type='datetime',
+                tools='ypan,zoom_in,zoom_out,reset,save',
+                title='Model-Estimated Daily New COVID-19 Infections Per 100,000 Residents',
+                y_range=Range1d(start=0, end=filt_data1.cases.max() + 50, bounds=(0, None)),
+                sizing_mode="scale_width", plot_height=400
+                )
+    hover_tool = HoverTool(tooltips=
+                           [('Date', '@dt{%x}'),
+                            ('State', '$name'),
+                            ('New Infections Per 100k Residents', '@cases{0}')],
+                           formatters={'@dt': 'datetime'}
+                           )
+    p1.add_tools(hover_tool)
+
+    p1.line(x='dt', y='cases', source=src2,
+            legend_label="State 1",
+            name="State 1", line_color='blue',
+            line_width=3, line_alpha=.8)
+
+    # set the second y-axis and use that with our second line
+    # p1.extra_y_ranges = {"y2": Range1d(start=0, end=filt_data2.cases.max()+50)}
+    p1.extra_y_ranges = {"y2": p1.y_range}
+    p1.add_layout(LinearAxis(y_range_name="y2",
+                             formatter=NumeralTickFormatter(format="0a")
+                             ),
+                  'right')
+    p1.line(x='dt', y='cases', source=src3,
+            legend_label="State 2",
+            name="State 2", line_color='orange',
+            line_width=3, line_alpha=.8, y_range_name="y2")
+
+    p1.yaxis[0].axis_label = 'New Infections Per 100k People'
+    p1.yaxis[1].axis_label = p1.yaxis[0].axis_label
+    p1.yaxis.formatter = NumeralTickFormatter(format="0a")
+    p1.legend.location = "top_left"
+    p1.xaxis.axis_label = 'Date'
+
+    p1.xaxis.formatter = DatetimeTickFormatter(days='%b %d', months='%b %d')
+    # this javascript snippet is the callback when either select is changed
+
+    # y_range.end = parseInt(y[y.length - 1]+50);
+    code = """
+    var c = cb_obj.value;
+    var y = s1.data[c];
+    var other_y = s3.data['cases'];
+    const y_nonan = y.filter(function (value) {
+        return !Number.isNaN(value);
+    });
+    var y_max = Math.max(...y_nonan);
+    const other_y_nonan = other_y.filter(function (value) {
+        return !Number.isNaN(value);
+    });
+    var other_y_max = Math.max(...other_y_nonan);
+    var both_ys_max = Math.max(other_y_max, y_max);
+    s2.data['cases'] = y;
+    y_range.start = 0;
+    y_range.end = parseInt(both_ys_max*1.05);
+    s2.change.emit();
+    """
+    callback1 = CustomJS(args=dict(s1=source,
+                                   s2=src2,
+                                   s3=src3,
+                                   y_range=p1.y_range
+                                   ), code=code)
+    callback2 = CustomJS(args=dict(s1=source,
+                                   s2=src3,
+                                   s3=src2,
+                                   y_range=p1.y_range
+                                   ), code=code)
+
+    select1 = Select(title="State 1:", value=state1, options=names_sub)
+    select1.js_on_change('value', callback1)
+    select2 = Select(title="State 2:", value=state2, options=names_sub)
+    select2.js_on_change('value', callback2)
+    # btn = Button(label='Update')
+
+    p1 = bk_legend(p1)
+    p1 = add_bokeh_footnote(p1)
+    p1.legend.orientation = 'horizontal'
+    p1.add_layout(p1.legend[0], 'above')
+
+    curdoc().theme = bk_theme
+    layout = column(row(select1, select2), row(p1), sizing_mode='scale_width')
+    return layout

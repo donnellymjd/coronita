@@ -10,7 +10,11 @@ dict_ch_defs['ch_rts'] = """Individual Reproduction Rate Estimates
 : Underlying the reproduction rate (Rt) estimate that the forecasting model uses are several reproduction rates based on various data, like cases, positivity rates, deaths, and hospitalizations. Each type of data has pros and cons. For example, case data (i.e. positive tests) can tell us of recent spikes in infections, but case data are not necessarily representative because they are affected by the number of tests conducted. On the other hand, death data are generally fairly representative but represent a long delay in changes of infection rates because people who die from COVID-19 on average pass away several weeks after infection.
 """
 
-dict_ch_defs['ch_statemap'] = """Cases Per 100,000 Residents
+dict_ch_defs['ch_statemap'] = """14-Day Change in COVID-19 Cases Per 100k Residents
+: Change in the reported cumulative COVID-19 cases per 100,000 residents over the most recent two weeks. The top end of the scale is set at the 90th percentile of all US counties. This chart is based on reported data rather than modeled data. As a result, states with higher testing rates will appear worse off than states with lower testing rates.
+"""
+
+dict_ch_defs['ch_statemap_total'] = """Cases Per 100,000 Residents
 : Reported cumulative COVID-19 cases per 100,000 residents. Many of the cases reported are no longer infectious as the vast majority of people who become infected with COVID-19 recover. The top end of the scale is set at the 90th percentile of all US counties.
 """
 

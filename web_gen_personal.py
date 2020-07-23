@@ -144,11 +144,12 @@ for state_code in list(df_census.state.unique()) + ['US']:
     model_dict = allstate_model_dicts[state_code]
     model_dict['footnote_str'] = footnote_str_maker()
 
-    fig = ch_statemap2(df_counties.query('dt == dt.max() and state == "{}"'.format(state_code)),
-                       model_dict['region_name'],
-                       df_counties.query('dt == dt.max()').cases_per100k.quantile(.9),
-                       counties_geo
-                      )
+    # fig = ch_statemap2(df_counties.query('dt == dt.max() and state == "{}"'.format(state_code)),
+    #                    model_dict['region_name'],
+    #                    df_counties.query('dt == dt.max()').cases_per100k.quantile(.9),
+    #                    counties_geo
+    #                   )
+    fig = ch_statemap_casechange(model_dict, df_counties, counties_geo)
     fig = add_plotly_footnote(fig)
     pio.orca.shutdown_server()
     fig.write_html('../donnellymjd.github.io/_covid19/datacenter/plotly/{}_casepercap_cnty_map.html'.format(
@@ -223,18 +224,18 @@ cmd_str = '{0}{1} {2}'.format(
     gs_cmd, pdf_out, ' '.join(sorted(l_pdfs_out)))
 os.system(cmd_str)
 
-# git_dir = '/Users/mdonnelly/repos/donnellymjd.github.io/'
-# git_commit_cmd = 'git commit -am "Auto update on {}"'.format(
-#     pd.Timestamp.today().strftime("%Y-%m-%d at %I:%M %p"))
-# print(git_commit_cmd)
-# status_out = subprocess.check_output('git status',
-#                                      cwd=git_dir, shell=True).decode()
-# print(status_out)
-# commit_out = subprocess.check_output(git_commit_cmd,
-#                                      cwd=git_dir, shell=True).decode()
-# print(commit_out)
-# push_out = subprocess.check_output('git push',
-#                                    cwd=git_dir, shell=True).decode()
-# print(push_out)
+git_dir = '/Users/mdonnelly/repos/donnellymjd.github.io/'
+git_commit_cmd = 'git commit -am "Auto update on {}"'.format(
+    pd.Timestamp.today().strftime("%Y-%m-%d at %I:%M %p"))
+print(git_commit_cmd)
+status_out = subprocess.check_output('git status',
+                                     cwd=git_dir, shell=True).decode()
+print(status_out)
+commit_out = subprocess.check_output(git_commit_cmd,
+                                     cwd=git_dir, shell=True).decode()
+print(commit_out)
+push_out = subprocess.check_output('git push',
+                                   cwd=git_dir, shell=True).decode()
+print(push_out)
 
 os.system('say -v "Victoria" "Your personal website is ready."')

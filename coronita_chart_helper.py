@@ -124,7 +124,7 @@ def ch_exposed_infectious(model_dict):
     df_chart = df_agg[['exposed', 'infectious']].dropna(how='all')
     df_chart = df_chart.clip(lower=0)
 
-    ax = df_chart.plot.area(figsize=[14, 8], title='Simultaneous Infections Forecast\n'+model_dict['chart_title'],
+    ax = df_chart.plot.area(figsize=[14, 8], title=model_dict['region_name']+': Simultaneous Infections Forecast\n'+model_dict['chart_title'],
                             legend=True, color=['#e5ae38', '#fc4f30'])
     ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0f}'))
 
@@ -167,7 +167,7 @@ def ch_cumul_infections(model_dict):
     df_chart = df_chart.clip(lower=0)
     df_chart = df_chart.iloc[8:]
 
-    ax = df_chart.plot(figsize=[14, 8], title='Cumulative Infections Forecast\n'+model_dict['chart_title'],
+    ax = df_chart.plot(figsize=[14, 8], title=model_dict['region_name']+': Cumulative Infections Forecast\n'+model_dict['chart_title'],
                        legend=True, label='Forecast Cumulative Infections',
                        color=['black'])
     ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0f}'))
@@ -192,7 +192,7 @@ def ch_daily_exposures(model_dict):
 
     df_chart = df_agg['exposed_daily'].dropna(how='all')
 
-    ax = df_chart.plot(figsize=[14, 8], title='Daily Exposures Forecast\n'+model_dict['chart_title'],
+    ax = df_chart.plot(figsize=[14, 8], title=model_dict['region_name']+': Daily Exposures Forecast\n'+model_dict['chart_title'],
                        legend=True, color=['#e5ae38'],
                        label='Forecast Daily New Infections (Exposed)')
     ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0f}'))
@@ -220,7 +220,7 @@ def ch_hosp(model_dict):
                                         'vent':'Forecast Ventilations',
                                         'deaths':'Forecast Cumulative Deaths'})
 
-    ax = df_chart.plot(figsize=[14, 8], title='Hospitalization and Deaths Forecast\n'+model_dict['chart_title'],
+    ax = df_chart.plot(figsize=[14, 8], title=model_dict['region_name']+': Hospitalization and Deaths Forecast\n'+model_dict['chart_title'],
                        color=['#6d904f', '#8b8b8b', '#810f7c', '#fc4f30'],
                        label=['Forecast Concurrent Hospitalizations',
                               'Forecast ICU Cases',
@@ -251,7 +251,7 @@ def ch_hosp_admits(model_dict):
 
     df_chart = df_agg['hosp_admits'].dropna(how='all')
 
-    ax = df_chart.plot(figsize=[14, 8], title='Daily Hospital Admissions Forecast\n'+model_dict['chart_title'],
+    ax = df_chart.plot(figsize=[14, 8], title=model_dict['region_name']+': Daily Hospital Admissions Forecast\n'+model_dict['chart_title'],
                        label='Forecast Hospital Admissions',
                        color='#6d904f')
     _ = ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0f}'))
@@ -280,7 +280,7 @@ def ch_daily_deaths(model_dict):
 
     df_chart = df_agg['deaths'].diff().dropna(how='all')
 
-    ax = df_chart.plot(figsize=[14, 8], title='Daily Deaths Forecast\n'+model_dict['chart_title'],
+    ax = df_chart.plot(figsize=[14, 8], title=model_dict['region_name']+': Daily Deaths Forecast\n'+model_dict['chart_title'],
                        label='Forecast Daily Deaths',
                        color='#fc4f30')
 
@@ -316,7 +316,7 @@ def ch_doubling_rt(model_dict):
                                         'deaths':'Daily Deaths'})
     df_chart = df_chart.iloc[8:]
 
-    ax = df_chart.plot(figsize=[14, 8], title='Doubling Rate Forecast\n' + model_dict['chart_title'],
+    ax = df_chart.plot(figsize=[14, 8], title=model_dict['region_name']+': Doubling Rate Forecast\n' + model_dict['chart_title'],
                        color=['#e5ae38', '#6d904f', '#fc4f30'])
 
     if 'cases_daily' in model_dict['df_hist'].columns:
@@ -360,7 +360,7 @@ def ch_population_share(model_dict):
     df_chart = df_chart.clip(lower=0)
     df_chart = df_chart.iloc[8:]
 
-    ax = df_chart.plot.area(figsize=[14, 8], title='Population Overview Forecast\n'+model_dict['chart_title'])
+    ax = df_chart.plot.area(figsize=[14, 8], title=model_dict['region_name']+': Population Overview Forecast\n'+model_dict['chart_title'])
     ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0f}'))
     plt.legend(title='Legend', loc='upper left', bbox_to_anchor=(1.07, 0.95), ncol=1)
     ax2 = ax.twinx()
@@ -405,7 +405,7 @@ def ch_rts(model_dict):
 
     ax.set_ylim([0,ax.get_ylim()[1]])
 
-    plt.legend(loc='upper left', bbox_to_anchor=(1.07, 0.95), ncol=1, title='Reproduction Factor Estimates')
+    plt.legend(loc='upper left', bbox_to_anchor=(1.07, 0.95), ncol=1, title=model_dict['region_name']+': Reproduction Factor Estimates')
 
     ax.text(1.08, 0.05, param_str, transform=ax.transAxes,
             verticalalignment='bottom', bbox={'ec': 'black', 'lw': 1})
@@ -423,7 +423,7 @@ def ch_rt_confid(model_dict):
 
     # lower68, upper68, lower95, upper95 = df_rt.iloc[:,1:5]
     ax = df_rt['rt'].dropna(how='all').plot(figsize=[14, 8],
-                                     title=r'Reproduction Rate ($R_{t}$) Estimate'+'\n'+model_dict['chart_title'],
+                                     title=model_dict['region_name']+r': Reproduction Rate ($R_{t}$) Estimate'+'\n'+model_dict['chart_title'],
                                      legend=True,
                                             label='$R_t$: {}'.format(rt_name))
     ci68 = plt.fill_between(df_rt['rt_u68'].index, df_rt['rt_u68'], df_rt['rt_l68'],
@@ -519,7 +519,7 @@ def ch_detection_rt(model_dict):
 
     ax = df_chart.plot(
         figsize=[14, 8],
-        title='COVID-19 Daily Infection Detection Rate\n' + model_dict['chart_title'],
+        title=model_dict['region_name']+': COVID-19 Daily Infection Detection Rate\n' + model_dict['chart_title'],
         legend=False
     )
     ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0%}'))
@@ -649,30 +649,43 @@ def ch_statemap2(df_chart, region_name, scale_max, counties, fitbounds='location
 
     return fig
 
-def ch_statemap_casechange(df_chart, region_name, scale_max, counties, fitbounds='locations'):
+def ch_statemap_casechange(model_dict, df_counties, counties_geo, fitbounds='locations'):
+    region_name = model_dict['region_name']
+
+    df_chart = df_counties['cases_per100k']
+    df_chart = df_chart.unstack(['state', 'county', 'fips']).diff(periods=14)
+    df_chart = df_chart.dropna(how='all', axis=1)
+    df_chart = df_chart.apply(lambda x: x[x.last_valid_index()]).reset_index()
+    df_chart = df_chart.rename(columns={0: 'cases_norm_14d_chg'})
+
+    scale_max = df_chart.cases_norm_14d_chg.quantile(.9)
+
+    if model_dict['region_code'] != 'US':
+        df_chart = df_chart[df_chart.state == model_dict['region_code']]
+
     import plotly.express as px
 
-    chart_title = region_name + ': COVID-19 Cases Per 100k Residents'
+    chart_title = region_name + ': 14-Day Change in COVID-19 Cases Per 100k Residents'
 
-    fig = px.choropleth(df_chart.reset_index()[['fips','cases_per100k']].dropna(),
-                        geojson=counties,
-                        locations='fips', color='cases_per100k',
+    fig = px.choropleth(df_chart,
+                        geojson=counties_geo,
+                        locations='fips', color='cases_norm_14d_chg',
                         color_continuous_scale="amp",
                         range_color=(0, max((scale_max//200),1)*200),
                         scope="usa",
                         title=chart_title,
                         projection='albers usa'
                         )
-    fig.update_traces(marker_line_width=0.5, marker_opacity=1.0, marker_line_color='gray')
 
-    if region_name == 'Alaska':
+
+    if model_dict['region_code'] in ['US','AK']:
         fitbounds = False
-    fig.update_geos(
-        fitbounds=fitbounds ,
-                    visible=True,
-                    showsubunits=True,
-                    subunitcolor="black"
-    )
+        marker_line_width = 0.1
+    else:
+        marker_line_width = 0.25
+
+    fig.update_traces(marker_line_width=marker_line_width, marker_opacity=1.0, marker_line_color='gray')
+    fig.update_geos(fitbounds=fitbounds, visible=True, showsubunits=True, subunitcolor="black")
 
     return fig
 

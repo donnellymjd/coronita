@@ -91,6 +91,8 @@ df_wavg_rt_conf_allregs = pd.read_pickle(latest_file)
 
 #####################################
 
+
+#### CREATE ONE OFF CHARTS (NATIONAL CHARTS) ####
 # fig = ch_rt_summary(df_wavg_rt_conf_allregs)
 # fig = add_plotly_footnote(fig)
 # fig.write_html('../COVIDoutlook/plotly/rt_summary.html')
@@ -99,6 +101,201 @@ fig = ch_exposure_prob(df_fore_allstates,
                        df_census[df_census.SUMLEV == 40].set_index('state')['pop2019'])
 fig = add_plotly_footnote(fig)
 fig.write_html('../COVIDoutlook/forecasts/plotly/ch_exposure_prob.html', include_plotlyjs='cdn')
+
+## Compare Exposures ##
+layout = bk_compare_exposures(df_census, df_fore_allstates)
+curdoc().theme = bk_theme
+script_loc = "/assets/js/compare.js"
+js, div = components(layout)
+js = js[37:-9]
+with io.open('../COVIDoutlook' + script_loc, mode='w', encoding='utf-8') as f:
+    f.write(js)
+
+script = '<script src="{}" async="True"></script>'.format(script_loc)
+
+resources = CDN.render()
+
+template = Template('''---
+layout: page
+title: Compare States
+image: duotone2.png
+---
+{{ resources }}
+{{ script }}
+{{ div }}
+''')
+
+resources = CDN.render()
+
+html = template.render(resources=resources,
+                       script=script,
+                       div=div)
+
+with io.open('../COVIDoutlook/compare.md', mode='w', encoding='utf-8') as f:
+    f.write(html)
+####
+
+
+## US Overview Page ##
+region_code = 'US'
+model_dict = allstate_model_dicts[region_code]
+
+df_agg = model_dict['df_agg']
+scenario_name = 'No Change in Future Rᵗ Until 20% Hospital Capacity Trigger'
+chart_title = ""  # "{1} Scenario".format(model_dict['region_name'], scenario_name)
+param_str = param_str_maker(model_dict)
+
+reset_output()
+
+p_cases = bk_positivetests(model_dict)
+# p_cases.x_range = Range1d(pd.Timestamp('2020-03-01'),
+#                           model_dict['df_hist'].last_valid_index())
+p_cases = bk_overview_layout(p_cases, 2)
+
+p_tests = bk_totaltests(model_dict)
+# p_tests.x_range = p_cases.x_range
+p_tests = bk_overview_layout(p_tests, 2)
+
+p_positivity = bk_postestshare(model_dict)
+# p_positivity.x_range = p_cases.x_range
+p_positivity = bk_overview_layout(p_positivity)
+
+p_rt_conf = bk_rt_confid(model_dict, simplify=False)
+# p_rt_conf.x_range = p_cases.x_range
+p_rt_conf = bk_overview_layout(p_rt_conf)
+
+p_googmvmt = bk_googmvmt(model_dict)
+# p_googmvmt.x_range = p_cases.x_range
+p_googmvmt = bk_overview_layout(p_googmvmt)
+
+p_det_rt = bk_detection_rt(df_agg, model_dict)
+# p_det_rt.x_range = p_cases.x_range
+p_det_rt = bk_overview_layout(p_det_rt)
+
+p_pop_share = bk_population_share(df_agg, model_dict, param_str, chart_title)
+# p_pop_share.x_range = p_cases.x_range
+p_pop_share = bk_overview_layout(p_pop_share)
+
+curdoc().theme = bk_theme
+r1 = [p_cases, p_tests, p_positivity, p_rt_conf, p_googmvmt,
+      p_det_rt, p_pop_share]
+
+script_loc = "/assets/js/us_overview.js"
+js, div = components(r1)
+js = js[37:-9]
+with io.open('../COVIDoutlook' + script_loc, mode='w', encoding='utf-8') as f:
+    f.write(js)
+
+script = '<script src="{}" async="True"></script>'.format(script_loc)
+
+resources = CDN.render()
+
+template = Template('''---
+layout: page
+title: Home - US Overview
+image: duotone-us.png
+---
+{{ resources }}
+{{ script }}
+
+<div class="w3-row-padding">
+    <div class="w3-half">
+        {{ div[0] }}
+    </div>
+
+    <div class="w3-half">
+        {{ div[1] }}
+    </div>
+</div>
+{% for chart in div[2:-1] %}
+    <div class="w3-container">
+        {{ chart }}
+    </div>
+{% endfor %}
+{{ exposure_prob }}
+{{ case_change }}
+<div class="w3-container">
+    {{ div[-1] }}
+</div>
+''')
+
+resources = CDN.render()
+exposure_prob = '{% include_relative forecasts/plotly/ch_exposure_prob.html %}'
+case_change = '{% include_relative forecasts/plotly/US_casepercap_cnty_map.html %}'
+
+html = template.render(resources=resources,
+                       script=script,
+                       div=div,
+                       exposure_prob=exposure_prob,
+                       case_change=case_change
+                       )
+
+with io.open('../COVIDoutlook/index.html', mode='w', encoding='utf-8') as f:
+    f.write(html)
+####
+
+## Reproduction Rate Page ##
+reset_output()
+df_rts_allregs = pd.DataFrame()
+df_wavg_rt_conf_allregs = pd.DataFrame()
+l_rt_conf = []
+
+model_dict = allstate_model_dicts['US']
+l_rt_conf.append(bk_rt_confid(model_dict, True))
+l_rt_conf[-1] = bk_overview_layout(l_rt_conf[-1], 1)
+
+l_state_names = sorted([abbrev_us_state[code] for code in df_census.state.unique()])
+
+for state_name in l_state_names:
+    state_code = us_state_abbrev[state_name]
+    model_dict = allstate_model_dicts[state_code]
+    l_rt_conf.append(bk_rt_confid(model_dict, simplify=True))
+    l_rt_conf[-1] = bk_repro_layout(l_rt_conf[-1], 2)
+
+curdoc().theme = bk_theme
+script_loc = "/assets/js/rts.js"
+js, div = components(l_rt_conf)
+js = js[37:-9]
+with io.open('../COVIDoutlook' + script_loc, mode='w', encoding='utf-8') as f:
+    f.write(js)
+
+script = '<script src="{}" async="True"></script>'.format(script_loc)
+
+resources = CDN.render()
+
+template = Template('''---
+layout: page
+title: Reproduction Rates
+image: duotone4.png
+---
+{{ resources }}
+{{ script }}
+
+<div class="w3-row-padding">
+    <div class="w3-container">
+        {{ div[0] }}
+    </div>
+{% for chart in div[1:] %}
+    <div class="w3-third">
+        {{ chart }}
+    </div>
+{% endfor %}
+</div>
+''')
+
+resources = CDN.render()
+
+html = template.render(resources=resources,
+                       script=script,
+                       div=div)
+
+with io.open('../COVIDoutlook/reproduction.md', mode='w', encoding='utf-8') as f:
+    f.write(html)
+
+##################################################
+
+
+#### CREATE STATE CHARTS AND MD PAGES ####
 
 l_charts = ['ch_positivetests', 'ch_totaltests', 'ch_postestshare','ch_rt_confid', 'ch_detection_rt',
            'ch_statemap', 'ch_googmvmt',
@@ -126,11 +323,12 @@ for state_code in list(df_census.state.unique()) + ['US']:
     model_dict = allstate_model_dicts[state_code]
     model_dict['footnote_str'] = footnote_str_maker()
 
-    fig = ch_statemap2(df_counties.query('dt == dt.max() and state == "{}"'.format(state_code)),
-                       model_dict['region_name'],
-                       df_counties.query('dt == dt.max()').cases_per100k.quantile(.9),
-                       counties_geo
-                      )
+    # fig = ch_statemap2(df_counties.query('dt == dt.max() and state == "{}"'.format(state_code)),
+    #                    model_dict['region_name'],
+    #                    df_counties.query('dt == dt.max()').cases_per100k.quantile(.9),
+    #                    counties_geo
+    #                   )
+    fig = ch_statemap_casechange(model_dict, df_counties, counties_geo)
     fig = add_plotly_footnote(fig)
     pio.orca.shutdown_server()
     fig.write_html('../COVIDoutlook/forecasts/plotly/{}_casepercap_cnty_map.html'.format(
@@ -173,7 +371,7 @@ for state_code in list(df_census.state.unique()) + ['US']:
 
     with open(filename, "w") as file:
         file.write(final_md)
-
+#####################################
 
 
 #### POST FORECAST DATA TO COVIDOUTLOOK ####
@@ -209,6 +407,10 @@ final_md = download_header.format('\n'.join(output_md))
 with open('../COVIDoutlook/data.md', "w") as file:
     file.write(final_md)
 
+#####################################
+
+
+#### COMMIT AND PUSH TO GITHUB AND HEROKU ####
 git_dir = '/Users/mdonnelly/repos/COVIDoutlook/'
 git_commit_cmd = 'git commit -am "Auto update on {}"'.format(
     pd.Timestamp.today().strftime("%Y-%m-%d at %I:%M %p"))
@@ -223,3 +425,4 @@ push_out = subprocess.check_output('git push heroku master', cwd=git_dir, shell=
 print(push_out)
 
 os.system('say -v "Victoria" "COVID Outlook dot info has been updated."')
+#####################################

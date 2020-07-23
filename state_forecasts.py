@@ -148,3 +148,6 @@ with open(asmd_filename, 'wb') as handle:
 os.system('say -v "Victoria" "Your forecasts are ready."')
 
 ######################
+
+import web_gen_covidoutlook
+import web_gen_personal
