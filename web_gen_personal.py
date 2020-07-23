@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-import os, time, stat, io, glob, pickle
+import os, time, stat, io, glob, pickle, subprocess
 from scipy.stats import gamma, norm
 from sklearn.linear_model import LinearRegression
 
@@ -100,14 +100,14 @@ df_wavg_rt_conf_allregs = pd.read_pickle(latest_file)
 
 fig = ch_rt_summary(df_wavg_rt_conf_allregs)
 fig = add_plotly_footnote(fig)
-fig.write_html('./output/state_fore/rt_summary.html')
-fig.write_html('../donnellymjd.github.io/_covid19/datacenter/plotly/rt_summary.html')
+fig.write_html('./output/state_fore/rt_summary.html', include_plotlyjs='cdn')
+fig.write_html('../donnellymjd.github.io/_covid19/datacenter/plotly/rt_summary.html', include_plotlyjs='cdn')
 
 fig = ch_exposure_prob(df_fore_allstates,
                        df_census[df_census.SUMLEV == 40].set_index('state')['pop2019'])
 fig = add_plotly_footnote(fig)
-fig.write_html('./output/state_fore/ch_exposure_prob.html')
-fig.write_html('../donnellymjd.github.io/_covid19/datacenter/plotly/ch_exposure_prob.html')
+fig.write_html('./output/state_fore/ch_exposure_prob.html', include_plotlyjs='cdn')
+fig.write_html('../donnellymjd.github.io/_covid19/datacenter/plotly/ch_exposure_prob.html', include_plotlyjs='cdn')
 
 cover_file = './output/state_fore/coverpage.pdf'
 chart_file = './output/state_fore/charts.pdf'
@@ -152,7 +152,7 @@ for state_code in list(df_census.state.unique()) + ['US']:
     fig = add_plotly_footnote(fig)
     pio.orca.shutdown_server()
     fig.write_html('../donnellymjd.github.io/_covid19/datacenter/plotly/{}_casepercap_cnty_map.html'.format(
-        model_dict['region_code']))
+        model_dict['region_code']), include_plotlyjs='cdn')
 
     try:
         pio.orca.shutdown_server()
@@ -223,9 +223,6 @@ cmd_str = '{0}{1} {2}'.format(
     gs_cmd, pdf_out, ' '.join(sorted(l_pdfs_out)))
 os.system(cmd_str)
 
-
-# import subprocess
-#
 # git_dir = '/Users/mdonnelly/repos/donnellymjd.github.io/'
 # git_commit_cmd = 'git commit -am "Auto update on {}"'.format(
 #     pd.Timestamp.today().strftime("%Y-%m-%d at %I:%M %p"))

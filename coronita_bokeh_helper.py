@@ -9,8 +9,8 @@ from bokeh.themes import built_in_themes
 from bokeh.layouts import row, column, grid
 from bokeh.models import ColumnDataSource, NumeralTickFormatter, HoverTool, Label, LinearAxis, Range1d, \
     Span, DatetimeTickFormatter, CustomJS, Select, Button, Patch, Legend, Div, Title
-from bokeh.embed import components
-from bokeh.resources import INLINE
+from bokeh.embed import components, autoload_static
+from bokeh.resources import INLINE, CDN
 
 from jinja2 import Template
 
@@ -24,7 +24,7 @@ def add_bokeh_footnote(p):
         x=0, y=0,
         x_units='screen', y_units='screen',
         text_font_size='80%',
-        text_color='white',
+        text_color='black',
         render_mode='canvas'
     )
 
@@ -43,7 +43,7 @@ def bk_legend(p, location='center', orientation='horizontal', font_size=1.35):
     p.legend.title = 'Interactive Legend'
     p.legend.title_text_font_style = "bold"
     p.legend.title_text_font_size = str(font_size*1.1)+'vw'
-    p.legend.title_text_color = "white"
+    p.legend.title_text_color = "black"
     p.legend.label_text_font_size = str(font_size)+'vw'
     p.legend.glyph_height = 15
     p.legend.label_height = 8
@@ -195,9 +195,9 @@ def bk_rt_confid(model_dict, simplify=True):
 
     patch = p.varea(x='dt', y1='rt_l68', y2='rt_u68', source=df_rt,
                     color='#E39D22', alpha=0.75, legend_label='68% Confidence Interval', level='glyph')
-    if not simplify:
-        patch2 = p.varea(x='dt', y1='rt_l95', y2='rt_u95', source=df_rt,
-                         color='#E39D22', alpha=0.25, legend_label='95% Confidence Interval', level='glyph')
+    # if not simplify:
+    patch2 = p.varea(x='dt', y1='rt_l95', y2='rt_u95', source=df_rt,
+                     color='#E39D22', alpha=0.25, legend_label='95% Confidence Interval', level='glyph')
 
     bg_upper = p.varea(x=[df_rt.dt.min(), df_rt.dt.max()],
                        y1=[1.0, 1.0], y2=[df_rt.rt_u95.max(), df_rt.rt_u95.max()],
@@ -213,7 +213,7 @@ def bk_rt_confid(model_dict, simplify=True):
 
     p.add_layout(Span(location=1.0,
                       dimension='width',
-                      line_color='white',  # thislinecolor,
+                      line_color='black',  # thislinecolor,
                       line_dash='dashed',
                       line_alpha=.7,
                       line_width=2
@@ -223,10 +223,10 @@ def bk_rt_confid(model_dict, simplify=True):
     if not simplify:
         p.add_layout(Label(
             x=df_rt.dt.mean(), y=1.5, y_units='data', text='Rᵗ > 1: Epidemic Worsening',
-            text_color='white', text_alpha=0.4, text_font_size='2vw', text_align='center'))
+            text_color='black', text_alpha=0.4, text_font_size='2vw', text_align='center'))
         p.add_layout(Label(
             x=df_rt.dt.mean(), y=0.1, y_units='data', text='Rᵗ < 1: Epidemic Improving',
-            text_color='white', text_alpha=0.4, text_font_size='2vw', text_align='center'))
+            text_color='black', text_alpha=0.4, text_font_size='2vw', text_align='center'))
 
     p.add_tools(HoverTool(
         tooltips=[
@@ -342,7 +342,7 @@ def bk_postestshare(model_dict):
 
 def bk_positivetests(model_dict):
     p = bk_bar_and_line_chart(bar_series=model_dict['df_hist']['cases_daily'].dropna(how='all'),
-                       bar_name='# of Positive Tests', bar_color='#e5ae38',
+                       bar_name='Positive Tests', bar_color='#e5ae38',
                        line_series=model_dict['df_hist']['cases_daily'].rolling(7, min_periods=1).mean(),
                        line_name='7-Day Rolling Average', yformat='{:0,.0f}',
                        title=model_dict['region_name'], subtitle='Positive COVID-19 Tests Per Day'
@@ -353,7 +353,7 @@ def bk_totaltests(model_dict):
     p = bk_bar_and_line_chart(bar_series=model_dict['df_hist']['pos_neg_tests_daily'].dropna(how='all'),
                           bar_name='Negative Tests',
                           line_series=model_dict['df_hist']['pos_neg_tests_daily'].rolling(7, min_periods=1).mean(),
-                          line_name='All Tests (7-Day Rolling Average)', yformat='{:0,.0f}',
+                          line_name='All Tests (7-Day Avg)', yformat='{:0,.0f}',
                           title=model_dict['region_name'], subtitle='COVID-19 Tests Per Day',
                           bar2_series=model_dict['df_hist']['cases_daily'], bar2_name='Positive Tests'
                           )

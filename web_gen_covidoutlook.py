@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-import os, time, stat, io, glob, pickle
+import os, time, stat, io, glob, pickle, subprocess
 from scipy.stats import gamma, norm
 from sklearn.linear_model import LinearRegression
 
@@ -42,7 +42,7 @@ def add_plotly_footnote(fig):
 
 state_md_template = '''---
 title: {0}
-layout: 'page'
+layout: noheader
 statecode: {1}
 ---
 {2}
@@ -98,11 +98,9 @@ df_wavg_rt_conf_allregs = pd.read_pickle(latest_file)
 fig = ch_exposure_prob(df_fore_allstates,
                        df_census[df_census.SUMLEV == 40].set_index('state')['pop2019'])
 fig = add_plotly_footnote(fig)
-fig.write_html('../COVIDoutlook/plotly/ch_exposure_prob.html')
+fig.write_html('../COVIDoutlook/forecasts/plotly/ch_exposure_prob.html', include_plotlyjs='cdn')
 
-l_charts = ['ch_rt_confid',
-           'ch_positivetests', 'ch_totaltests', 'ch_postestshare',
-           'ch_detection_rt',
+l_charts = ['ch_positivetests', 'ch_totaltests', 'ch_postestshare','ch_rt_confid', 'ch_detection_rt',
            'ch_statemap', 'ch_googmvmt',
            'ch_exposed_infectious', 'ch_hosp',
            'ch_population_share',
@@ -135,8 +133,8 @@ for state_code in list(df_census.state.unique()) + ['US']:
                       )
     fig = add_plotly_footnote(fig)
     pio.orca.shutdown_server()
-    fig.write_html('../COVIDoutlook/plotly/{}_casepercap_cnty_map.html'.format(
-        model_dict['region_code']))
+    fig.write_html('../COVIDoutlook/forecasts/plotly/{}_casepercap_cnty_map.html'.format(
+        model_dict['region_code']), include_plotlyjs='cdn')
 
     try:
         pio.orca.shutdown_server()
@@ -154,32 +152,24 @@ for state_code in list(df_census.state.unique()) + ['US']:
             print('Couldn\'t create {} {} chart.'.format(model_dict['region_code'], ch_name))
 
 
-    l_content = ['<h3>How Fast is COVID-19 Currently Spreading?</h3>']
+    l_content = ['### How Fast is COVID-19 Currently Spreading?']
 
     for thischart in l_charts:
         if thischart == 'ch_statemap':
             l_content.append('{{% include_relative plotly/{}_casepercap_cnty_map.html %}}'.format(state_code))
         else:
-            l_content.append("<img src='/assets/images/covid19/{}_{}.png' class='image fit'>".format(
+            l_content.append("<img src='/assets/images/covid19/{}_{}.png'>".format(
                 state_code, thischart))
 
         if thischart in dict_ch_defs.keys():
-            l_content.append(dict_ch_defs[thischart] + '<br><br>')
+            l_content.append(dict_ch_defs[thischart]+'\n- - - -')
 
-    l_content.insert(2, '<!--more-->')
+    l_content.insert(15, '### Model and Forecast Results')
 
-    l_content.insert(16, '<h3>Model and Forecast Results</h3>')
-
-    if state_code == 'US':
-        pagerank = 1
-        menu_icon = 'fa-flag-usa'
-    else:
-        pagerank = 3
-        menu_icon = 'fa-head-side-mask'
 
     final_md = state_md_template.format(model_dict['region_name'], state_code, '\n'.join(l_content))
 
-    filename = "../COVIDoutlook/{}.md".format(state_code)
+    filename = "../COVIDoutlook/forecasts/{}.md".format(state_code)
 
     with open(filename, "w") as file:
         file.write(final_md)
