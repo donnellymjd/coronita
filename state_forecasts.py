@@ -149,5 +149,5 @@ os.system('say -v "Victoria" "Your forecasts are ready."')
 
 ######################
 
-import web_gen_covidoutlook
-import web_gen_personal
+os.system('python web_gen_covidoutlook.py >> web_gen_covidoutlook.log &')
+os.system('python web_gen_personal.py >> web_gen_covidoutlook.log &')

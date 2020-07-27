@@ -25,14 +25,14 @@ def footnote_str_maker():
 def add_plotly_footnote(fig):
     fig.update_layout(
                   annotations=[
-                      dict(x = 0, y = -0.06, showarrow = False,
-                           xref='paper', yref='paper',
+                      dict(x = 0, y = -0.06,
+                           xref='paper', yref='paper', font_size=10, showarrow=False,
                            xanchor='left', yanchor='auto', xshift=0, yshift=0,
                             text='<a href="http://{0}">{0}</a> | twtr: <a href="https://twitter.com/COVIDoutlook">@COVIDoutlook</a> | '.format(
                            'www.COVIDoutlook.info')
                           ),
-                      dict(x = 0, y = -0.09, showarrow = False,
-                           xref='paper', yref='paper',
+                      dict(x = 0, y = -0.09,
+                           xref='paper', yref='paper', font_size=10, showarrow=False,
                            xanchor='left', yanchor='auto', xshift=0, yshift=0,
                            text='Chart created on {}'.format(pd.Timestamp.today().strftime("%d %b %Y"))
                           )
@@ -45,6 +45,7 @@ title: {0}
 layout: noheader
 statecode: {1}
 ---
+## {0}
 {2}
 '''
 
@@ -97,8 +98,7 @@ df_wavg_rt_conf_allregs = pd.read_pickle(latest_file)
 # fig = add_plotly_footnote(fig)
 # fig.write_html('../COVIDoutlook/plotly/rt_summary.html')
 
-fig = ch_exposure_prob(df_fore_allstates,
-                       df_census[df_census.SUMLEV == 40].set_index('state')['pop2019'])
+fig = ch_exposure_prob_anim(df_fore_allstates, df_census)
 fig = add_plotly_footnote(fig)
 fig.write_html('../COVIDoutlook/forecasts/plotly/ch_exposure_prob.html', include_plotlyjs='cdn')
 
@@ -214,9 +214,19 @@ image: duotone-us.png
     </div>
     <hr>
 {% endfor %}
-{{ exposure_prob }}
+<div>
+    <iframe
+    src="forecasts/plotly/ch_exposure_prob.html"
+    style="margin:0; width:100%; height:800px; border:none;" scrolling="auto" sandbox="allow-scripts"
+    onload="AdjustIframeHeightOnLoad()"></iframe>
+</div>
 <hr>
-{{ case_change }}
+<div>
+    <iframe
+    src="forecasts/plotly/US_casepercap_cnty_map.html"
+    style="margin:0; width:100%; height:800px; border:none;" scrolling="auto" sandbox="allow-scripts"
+    onload="AdjustIframeHeightOnLoad()"></iframe>
+</div>
 <hr>
 <div class="w3-container">
     {{ div[-1] }}
@@ -322,6 +332,12 @@ d_chart_fns = {'ch_rt_confid': ch_rt_confid,
  'ch_hosp_admits': ch_hosp_admits,
  'ch_daily_deaths': ch_daily_deaths}
 
+state_plotly_html = '''<div>
+    <iframe 
+    src="/forecasts/plotly/{}_casepercap_cnty_map.html"
+    style="margin:0; width:100%; height:800px; border:none; overflow:hidden;" scrolling="no"></iframe>
+</div>'''
+
 for state_code in list(df_census.state.unique()) + ['US']:
     print(state_code)
     model_dict = allstate_model_dicts[state_code]
@@ -334,7 +350,6 @@ for state_code in list(df_census.state.unique()) + ['US']:
     #                   )
     fig = ch_statemap_casechange(model_dict, df_counties, counties_geo)
     fig = add_plotly_footnote(fig)
-    pio.orca.shutdown_server()
     fig.write_html('../COVIDoutlook/forecasts/plotly/{}_casepercap_cnty_map.html'.format(
         model_dict['region_code']), include_plotlyjs='cdn')
 
@@ -360,7 +375,8 @@ for state_code in list(df_census.state.unique()) + ['US']:
 
     for thischart in l_charts:
         if thischart == 'ch_statemap':
-            l_content.append('{{% include_relative plotly/{}_casepercap_cnty_map.html %}}'.format(state_code))
+            # l_content.append('{{% include_relative plotly/{}_casepercap_cnty_map.html %}}'.format(state_code))
+            l_content.append(state_plotly_html.format(state_code))
         else:
             l_content.append("<img src='/assets/images/covid19/{}_{}.png'>".format(
                 state_code, thischart))

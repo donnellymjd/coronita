@@ -600,6 +600,52 @@ def ch_exposure_prob(df_fore_allstates, s_pop):
 
     return fig
 
+def ch_exposure_prob_anim(df_fore_allstates, df_census):
+    s_pop = df_census[df_census.SUMLEV == 40].set_index('state')['pop2019']
+    colorbar_name = 'Probability'
+    df_chart = df_fore_allstates.unstack('dt').loc[['exposed', 'infectious']].T.sum(axis=1)
+    df_chart = df_chart.unstack(0).div(s_pop).dropna(how='all', axis=1)
+    df_chart = df_chart.loc[:pd.Timestamp.today()].stack()
+    df_chart = (1 - (1 - df_chart) ** 10).reset_index()
+    df_chart.columns = ['dt','state', colorbar_name]
+    df_chart[colorbar_name] = df_chart[colorbar_name].mul(100).round(1)
+    df_firstframe = df_chart[df_chart.dt == df_chart.dt.max()].copy()
+    df_firstframe['dt'] = 'Today (' + df_firstframe.dt.dt.strftime('%B %d, %Y') + ')'
+    df_chart = df_chart[df_chart.dt.isin(pd.date_range(end=pd.Timestamp.today().normalize(), periods=100, freq='7d'))]
+    df_chart['dt'] =df_chart.dt.dt.strftime('%B %d, %Y')
+    df_chart = pd.concat([df_firstframe,df_chart])
+
+    import plotly.express as px
+
+    chart_title = 'US: Model-Estimated COVID-19 Exposure Probability Per 10 Contacts Over Time'
+
+    fig = px.choropleth(df_chart,
+                        locations=df_chart['state'],
+                        locationmode="USA-states",
+                        color=colorbar_name,
+                        color_continuous_scale="BuPu",
+                        range_color=(0, 10),
+                        title=chart_title,
+                        projection='albers usa',
+                        animation_group='state',
+                        animation_frame='dt',
+                        hover_name='state',
+                        hover_data=[colorbar_name]
+                        )
+    fig.update_layout(autosize=True,
+            margin=dict(l=10,r=10,b=100,t=100, pad=0),
+        coloraxis_colorbar=dict(len=0.75,thickness=30,
+                                yanchor="top", y=1,
+                                ticks="outside", ticksuffix="%")
+        )
+
+    import plotly.graph_objects as go
+    fig = go.Figure(fig)
+    fig.update_layout(coloraxis=dict(colorbar=dict(tickvals=[0, 2, 4, 6, 8, 10],
+                                                   ticktext=['0%', '2%', '4%', '6%', '8%', '10%+'])))
+
+    return fig
+
 def ch_statemap(df_chart, region_name, scope=['USA']):
     import plotly.express as px
     import plotly.figure_factory as ff
@@ -634,7 +680,10 @@ def ch_statemap2(df_chart, region_name, scale_max, counties, fitbounds='location
                         range_color=(0, max((scale_max//200),1)*200),
                         scope="usa",
                         title=chart_title,
-                        projection='albers usa'
+                        projection='albers usa',
+                        hover_name='county',
+                        hover_data=['cases_per100k'],
+                        labels={'cases_per100k':'Cases Per 100k'}
                         )
     fig.update_traces(marker_line_width=0.5, marker_opacity=1.0, marker_line_color='gray')
 
@@ -665,7 +714,7 @@ def ch_statemap_casechange(model_dict, df_counties, counties_geo, fitbounds='loc
 
     import plotly.express as px
 
-    chart_title = region_name + ': 14-Day Change in COVID-19 Cases Per 100k Residents'
+    chart_title = region_name + ': New COVID-19 Cases Per 100k Residents Over Last 14 Days'
 
     fig = px.choropleth(df_chart,
                         geojson=counties_geo,
@@ -674,7 +723,10 @@ def ch_statemap_casechange(model_dict, df_counties, counties_geo, fitbounds='loc
                         range_color=(0, max((scale_max//200),1)*200),
                         scope="usa",
                         title=chart_title,
-                        projection='albers usa'
+                        projection='albers usa',
+                        hover_name='county',
+                        hover_data=['cases_norm_14d_chg'],
+                        labels={'cases_norm_14d_chg':'New Cases Per 100k'}
                         )
 
 
@@ -687,6 +739,51 @@ def ch_statemap_casechange(model_dict, df_counties, counties_geo, fitbounds='loc
     fig.update_traces(marker_line_width=marker_line_width, marker_opacity=1.0, marker_line_color='gray')
     fig.update_geos(fitbounds=fitbounds, visible=True, showsubunits=True, subunitcolor="black")
 
+    return fig
+
+def ch_statemap_casechange_anim(model_dict, df_counties, counties_geo, fitbounds='locations'):
+    region_name = model_dict['region_name']
+    df_chart = df_counties['cases_per100k']
+    df_chart = df_chart.unstack(['state', 'county', 'fips']).fillna(0).diff(periods=14)
+    df_chart = df_chart.dropna(how='all', axis=1)
+    df_chart = df_chart.unstack('dt').reset_index().dropna()
+    df_chart = df_chart.rename(columns={0: 'cases_norm_14d_chg'})
+    # df_chart[(df_chart.dt + pd.Timedelta(days=1)).dt.day == 1] ## Last day of the month
+    df_chart = df_chart[df_chart.dt.dt.day == df_chart.dt.max().day]
+    df_chart['dt'] =df_chart.dt.dt.strftime('%B %d, %Y')
+
+    scale_max = df_chart.cases_norm_14d_chg.quantile(.9)
+
+    if model_dict['region_code'] != 'US':
+        df_chart = df_chart[df_chart.state == model_dict['region_code']]
+
+    import plotly.express as px
+
+    chart_title = region_name + ': 14-Day Change in COVID-19 Cases Per 100k Residents'
+
+    fig = px.choropleth(df_chart,
+                        geojson=counties_geo,
+                        locations='fips', color='cases_norm_14d_chg',
+                        color_continuous_scale="amp",
+                        range_color=(0, max((scale_max//200),1)*200),
+                        scope="usa",
+                        title=chart_title,
+                        projection='albers usa',
+                        animation_group='fips',
+                        animation_frame='dt',
+                        hover_name='county',
+                        hover_data=['cases_norm_14d_chg'],
+                        labels={'cases_norm_14d_chg':'14-day Change'}
+                        )
+    if model_dict['region_code'] in ['US','AK']:
+        fitbounds = False
+        marker_line_width = 0.1
+    else:
+        marker_line_width = 0.25
+
+    fig.update_traces(marker_line_width=marker_line_width, marker_opacity=1.0, marker_line_color='gray',
+                      hovertemplate=None)
+    fig.update_geos(fitbounds='locations', visible=True, showsubunits=True, subunitcolor="black")
     return fig
 
 def run_all_charts(model_dict, scenario_name='', pdf_out=False, show_charts=True, pub2web=False):

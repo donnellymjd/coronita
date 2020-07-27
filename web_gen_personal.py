@@ -27,13 +27,13 @@ def footnote_str_maker():
 def add_plotly_footnote(fig):
     fig.update_layout(
                   annotations=[
-                      dict(x = 0, y = -0.06, showarrow = False,
+                      dict(x = 0, y = -0.06, font_size=10, showarrow=False,
                            xref='paper', yref='paper',
                            xanchor='left', yanchor='auto', xshift=0, yshift=0,
                            text='Author: Michael Donnelly | twtr: <a href="https://twitter.com/donnellymjd">@donnellymjd</a> | <a href="http://{0}">{0}</a>'.format(
                            'www.michaeldonnel.ly')
                           ),
-                      dict(x = 0, y = -0.09, showarrow = False,
+                      dict(x = 0, y = -0.09, font_size=10, showarrow=False,
                            xref='paper', yref='paper',
                            xanchor='left', yanchor='auto', xshift=0, yshift=0,
                            text='Chart created on {}'.format(pd.Timestamp.today().strftime("%d %b %Y"))
