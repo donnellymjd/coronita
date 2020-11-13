@@ -16,6 +16,7 @@ from coronita_bokeh_helper import *
 from matplotlib.backends.backend_pdf import PdfPages
 
 ### Settings and Functions for Personal Website ###
+# plt.style.use('./personal_web.mplstyle')
 plt.style.use('fivethirtyeight')
 
 def footnote_str_maker():
@@ -76,9 +77,8 @@ df_st_testing_fmt = df_st_testing_fmt.rename(columns={'death':'deaths','positive
 df_interventions = get_state_policy_events()
 
 df_goog_mob_us = get_goog_mvmt_us()
+df_goog_mob_state = get_goog_mvmt_state(df_goog_mob_us)
 df_goog_mob_us = df_goog_mob_us[df_goog_mob_us.state.isnull()].set_index('dt')
-
-df_goog_mob_state = get_goog_mvmt_state()
 
 list_of_files = glob.glob('./output/df_fore_allstates_*.pkl') # * means all if need specific format then *.csv
 latest_file = max(list_of_files, key=os.path.getctime)
@@ -171,7 +171,7 @@ for state_code in list(df_census.state.unique()) + ['US']:
                 model_dict['region_code'], ch_name)
             plt.savefig(filename, bbox_inches='tight')
             plt.close()
-            os.system('optipng {} &'.format(filename))
+            # os.system('optipng {} &'.format(filename))
         except:
             print('Couldn\'t create {} {} chart.'.format(model_dict['region_code'], ch_name))
 

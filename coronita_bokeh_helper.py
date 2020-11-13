@@ -512,6 +512,20 @@ def bk_compare_exposures(df_census, df_fore_allstates):
     select2.js_on_change('value', callback2)
     # btn = Button(label='Update')
 
+    p1.add_layout(Span(location=pd.Timestamp.today(),
+                      dimension='height',
+                      line_color='black',  # thislinecolor,
+                      line_dash='dashed',
+                      line_alpha=.7,
+                      line_width=2
+                      )
+                 )
+    p1.add_layout(Label(
+        x=pd.Timestamp.today(), y=0, y_units='data', text='Today',
+        text_color='black', text_alpha=0.4, text_font_size='2vw', text_align='center',
+        text_baseline='bottom'
+    ))
+
     p1 = bk_legend(p1)
     p1 = add_bokeh_footnote(p1)
     p1.legend.orientation = 'horizontal'

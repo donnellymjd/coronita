@@ -3,10 +3,13 @@ import numpy as np
 from collections import OrderedDict
 import io
 
-from coronita_model_helper import *
+from coronita_model_helper import outlier_removal
 
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes, mark_inset
+import matplotlib.dates as mdates
+import matplotlib.units as munits
 
 # plt.style.use('fivethirtyeight')
 # personalsitestyle = 'fivethirtyeight'
@@ -114,6 +117,12 @@ def param_str_maker(model_dict):
                            ))
     return param_str
 
+def today_vline(ax):
+    ax.axvline(x=pd.Timestamp.today(), ymin=0, ymax=ax.get_ylim()[1], color = 'black', linewidth=1, linestyle=":")
+    ax.text(pd.Timestamp.today(), ax.get_ylim()[1]*.95, 'Today: ' + pd.Timestamp.today().strftime("%B %d, %Y"),
+             rotation=90, verticalalignment='top', horizontalalignment='right', size='large')
+    return ax
+
 
 ### SINGLE REGION CHARTS ###
 def ch_exposed_infectious(model_dict):
@@ -156,6 +165,7 @@ def ch_exposed_infectious(model_dict):
     
     plt.annotate(model_dict['footnote_str'],
                  (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
+    ax = today_vline(ax)
     return ax
 
 def ch_cumul_infections(model_dict):
@@ -176,6 +186,7 @@ def ch_cumul_infections(model_dict):
         model_dict['df_hist']['cases_tot'].loc[df_chart.index[0]:].plot(
             ax=ax, linestyle=':', legend=True, color=['black'],
             label='Reported Cumulative Infections')
+    ax.set_ylim([0, ax.get_ylim()[1]])
     plt.legend(title='Legend', loc='upper left', bbox_to_anchor=(1.07, 0.95), ncol=1)
     ax.text(1.08, 0.05, param_str, transform=ax.transAxes,
             verticalalignment='bottom', bbox={'ec': 'black', 'lw': 1})
@@ -183,6 +194,7 @@ def ch_cumul_infections(model_dict):
     
     plt.annotate(model_dict['footnote_str'],
                  (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
+    ax = today_vline(ax)
     return ax
 
 def ch_daily_exposures(model_dict):
@@ -201,6 +213,8 @@ def ch_daily_exposures(model_dict):
         model_dict['df_hist']['cases_tot'].loc[df_chart.index[0]:].diff().plot(
             ax=ax, linestyle=':', legend=True, color=['#e5ae38'],
             label='Reported Daily New Infections (Exposed)')
+
+    ax.set_ylim([0, ax.get_ylim()[1]])
     plt.legend(title='Legend', loc='upper left', bbox_to_anchor=(1.07, 0.95), ncol=1)
     ax.text(1.08, 0.05, param_str, transform=ax.transAxes,
             verticalalignment='bottom', bbox={'ec': 'black', 'lw': 1})
@@ -208,6 +222,7 @@ def ch_daily_exposures(model_dict):
     
     plt.annotate(model_dict['footnote_str'],
                  (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
+    ax = today_vline(ax)
     return ax
 
 def ch_hosp(model_dict):
@@ -236,6 +251,7 @@ def ch_hosp(model_dict):
         df_chart.index[0]:].plot(ax=ax, linestyle=':', legend=True,
                                  label='Reported Total Deaths',
                                  color='#fc4f30')
+    ax.set_ylim([0, ax.get_ylim()[1]])
     plt.legend(title='Legend', loc='upper left', bbox_to_anchor=(1.07, 0.95), ncol=1)
     ax.text(1.08, 0.05, param_str, transform=ax.transAxes,
             verticalalignment='bottom', bbox={'ec': 'black', 'lw': 1})
@@ -243,6 +259,7 @@ def ch_hosp(model_dict):
     
     plt.annotate(model_dict['footnote_str'],
                  (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
+    ax = today_vline(ax)
     return ax
 
 def ch_hosp_admits(model_dict):
@@ -272,6 +289,7 @@ def ch_hosp_admits(model_dict):
     
     plt.annotate(model_dict['footnote_str'],
                  (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
+    ax = today_vline(ax)
     return ax
 
 def ch_daily_deaths(model_dict):
@@ -302,6 +320,7 @@ def ch_daily_deaths(model_dict):
     
     plt.annotate(model_dict['footnote_str'],
                  (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
+    ax = today_vline(ax)
     return ax
 
 def ch_doubling_rt(model_dict):
@@ -371,7 +390,7 @@ def ch_population_share(model_dict):
     ax.set_ylabel('Population')
     ax2.set_ylim([0, 1.0])
     ax2.set_yticks(np.linspace(0, 1.0, 5), minor=False)
-    ax2.set_yticks(np.linspace(0, 1.0, 25), minor=True)
+    ax2.set_yticks(np.linspace(0, 1.0, 20), minor=True) # Replaced 25 with 20
     ax2.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0%}'))
     ax2.tick_params(axis='y', reset=True, direction='inout', which='minor', color='black', left=True,
                     length=10 , width=1)
@@ -384,6 +403,7 @@ def ch_population_share(model_dict):
     
     plt.annotate(model_dict['footnote_str'],
                  (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
+    ax = today_vline(ax)
     return ax
 
 def ch_rts(model_dict):
@@ -398,7 +418,7 @@ def ch_rts(model_dict):
                 ['test_share', 'deaths_daily', 'hosp_concur', 'hosp_admits',
                  'cases_daily'] ]
     ax = df_just_rts[solo_rts].dropna(how='all').plot(figsize=[14, 8], alpha=0.2,
-                                                               title=r'Reproduction Rate ($R_{t}$) Estimates'+'\n'+model_dict['chart_title'],
+                                                               title=model_dict['region_name']+r': Reproduction Rate ($R_{t}$) Estimates',
                                                                legend=True)
 
     df_just_rts['weighted_average'].dropna().plot(ax=ax, legend=True)
@@ -470,20 +490,54 @@ def ch_positivetests(model_dict):
 
 def ch_postestshare(model_dict):
     df_chart = model_dict['df_hist'][['cases_daily', 'pos_neg_tests_daily']].clip(lower=0)
-    df_chart = df_chart.div(df_chart['pos_neg_tests_daily'], axis=0).dropna(how='all')
+    df_chart['neg_tests_daily'] = (df_chart['pos_neg_tests_daily'] - df_chart['cases_daily']).clip(lower=0)
+    df_chart = df_chart.div(df_chart[['cases_daily', 'pos_neg_tests_daily']].max(axis=1), axis=0).dropna(how='all')
+    df_chart['sevendayavg'] = df_chart['cases_daily'].mask(df_chart['cases_daily'] >= 1.0
+                                                           ).rolling(7, min_periods=1).mean()
 
-    ax = df_chart.plot(kind='area', stacked=True,
-                       title='{}: COVID-19 Positivity Rate'.format(model_dict['region_name']),
-                       figsize=[14, 8],
-                       color=['#e5ae38', '#008fd5'])
+    ax = df_chart[['cases_daily', 'neg_tests_daily']].plot(
+        kind='area', stacked=True,
+        title='{}: COVID-19 Positivity Rate'.format(model_dict['region_name']),
+        figsize=[14, 8], color=['#e5ae38', '#008fd5'])
     df_chart['sevendayavg'] = df_chart['cases_daily'].mask(df_chart['cases_daily']>=1.0
                                                            ).rolling(7, min_periods=1).mean()
     df_chart['sevendayavg'].plot(ax=ax, linestyle='-', color='#fc4f30')
     ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0%}'))
+    locator = mdates.AutoDateLocator(minticks=3, maxticks=7)
+    formatter = mdates.ConciseDateFormatter(locator)
+    ax.xaxis.set_major_locator(locator)
+    ax.xaxis.set_major_formatter(formatter)
     plt.legend(title='Legend', bbox_to_anchor=(1.07, 0.95), ncol=1,
                labels=['% Positive Tests', '% Negative Tests', '7-Day Rolling Average - Positivity Rate'])
     ax.set_ylim(0, min(1, df_chart['sevendayavg'].max() * 1.25))
+    ax.set_xlim(ax.get_xlim()[0] + 10, ax.get_xlim()[1] - 10)
     ax.set_xlabel('')
+
+    inset_days = 90
+
+    if df_chart.iloc[inset_days*-1:]['sevendayavg'].max() < (0.15 * ax.get_ylim()[1]):
+        axins = inset_axes(ax, width="40%", height="60%", loc=4, borderpad=4,
+                          axes_kwargs={'alpha': 1, 'frame_on': True})
+
+        df_chart[['cases_daily', 'neg_tests_daily']].plot(
+            ax=axins, kind='area', stacked=True,
+            color=['#e5ae38', '#008fd5'], legend=False)
+        df_chart['sevendayavg'].plot(ax=axins, linestyle='-', color='#fc4f30', legend=False)
+
+        if df_chart['sevendayavg'].iloc[-inset_days:].max() * 1.1 < .1:
+            axins.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.1%}'))
+        else:
+            axins.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0%}'))
+
+        axins.set_ylim(0, min(1, df_chart.iloc[inset_days*-1:]['sevendayavg'].max() * 1.25))
+        axins.set_xlim(axins.get_xlim()[1]-inset_days-10, axins.get_xlim()[1] - 10)
+        axins.set_xlabel('')
+
+        months = mdates.MonthLocator()  # every month
+        months_fmt = mdates.DateFormatter('%b')
+        axins.xaxis.set_major_locator(months)
+        axins.xaxis.set_major_formatter(months_fmt)
+        mark_inset(ax, axins, loc1=3, loc2=4)
 
     plt.annotate(model_dict['footnote_str'],
                  (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
@@ -515,7 +569,10 @@ def ch_detection_rt(model_dict):
     param_str = param_str_maker(model_dict)
     df_agg = model_dict['df_agg']
 
-    df_chart = model_dict['df_hist']['cases_daily'].rolling(7).mean().div(df_agg['exposed_daily']).dropna()
+    df_chart = model_dict['df_hist']['cases_daily'].rolling(7).sum().div(
+        df_agg['exposed_daily'].rolling(7).sum()).dropna()
+
+    df_chart = df_chart.rolling(7, win_type='gaussian', center=True, min_periods=1).mean(std=3)
 
     ax = df_chart.plot(
         figsize=[14, 8],
@@ -523,6 +580,7 @@ def ch_detection_rt(model_dict):
         legend=False
     )
     ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0%}'))
+    ax.set_ylim([0, ax.get_ylim()[1]])
 
     ax.text(1.08, 0.05, param_str, transform=ax.transAxes,
             verticalalignment='bottom', bbox={'ec': 'black', 'lw': 1})
@@ -601,23 +659,33 @@ def ch_exposure_prob(df_fore_allstates, s_pop):
     return fig
 
 def ch_exposure_prob_anim(df_fore_allstates, df_census):
+    from covid_data_helper import abbrev_us_state
     s_pop = df_census[df_census.SUMLEV == 40].set_index('state')['pop2019']
     colorbar_name = 'Probability'
     df_chart = df_fore_allstates.unstack('dt').loc[['exposed', 'infectious']].T.sum(axis=1)
     df_chart = df_chart.unstack(0).div(s_pop).dropna(how='all', axis=1)
     df_chart = df_chart.loc[:pd.Timestamp.today()].stack()
     df_chart = (1 - (1 - df_chart) ** 10).reset_index()
-    df_chart.columns = ['dt','state', colorbar_name]
+    df_chart.columns = ['dt', 'state', colorbar_name]
+    df_chart['fullstatename'] = df_chart['state'].replace(abbrev_us_state)
     df_chart[colorbar_name] = df_chart[colorbar_name].mul(100).round(1)
-    df_firstframe = df_chart[df_chart.dt == df_chart.dt.max()].copy()
-    df_firstframe['dt'] = 'Today (' + df_firstframe.dt.dt.strftime('%B %d, %Y') + ')'
-    df_chart = df_chart[df_chart.dt.isin(pd.date_range(end=pd.Timestamp.today().normalize(), periods=100, freq='7d'))]
+    # df_firstframe = df_chart[df_chart.dt == df_chart.dt.max()].copy()
+    # df_firstframe['dt'] = 'Today (' + df_firstframe.dt.dt.strftime('%B %d, %Y') + ')'
+    df_chart = df_chart[df_chart.dt.isin(
+        pd.date_range(
+            end=pd.Timestamp.today().normalize(),
+            start=pd.Timestamp('2020-03-01'),
+            # periods=100,
+            freq='3d'
+        ).append( pd.Index([pd.Timestamp.today().normalize()]) )
+    ) ]
     df_chart['dt'] =df_chart.dt.dt.strftime('%B %d, %Y')
-    df_chart = pd.concat([df_firstframe,df_chart])
+    # df_chart = pd.concat([df_firstframe,df_chart])
 
     import plotly.express as px
+    import plotly.graph_objects as go
 
-    chart_title = 'US: Model-Estimated COVID-19 Exposure Probability Per 10 Contacts Over Time'
+    chart_title = 'US: Model-Estimated COVID-19 Exposure Probability Per 10 Contacts'
 
     fig = px.choropleth(df_chart,
                         locations=df_chart['state'],
@@ -629,20 +697,72 @@ def ch_exposure_prob_anim(df_fore_allstates, df_census):
                         projection='albers usa',
                         animation_group='state',
                         animation_frame='dt',
-                        hover_name='state',
+                        hover_name='fullstatename',
                         hover_data=[colorbar_name]
                         )
-    fig.update_layout(autosize=True,
-            margin=dict(l=10,r=10,b=100,t=100, pad=0),
-        coloraxis_colorbar=dict(len=0.75,thickness=30,
-                                yanchor="top", y=1,
-                                ticks="outside", ticksuffix="%")
-        )
 
-    import plotly.graph_objects as go
+    fig.update_layout(autosize=True)
+
     fig = go.Figure(fig)
-    fig.update_layout(coloraxis=dict(colorbar=dict(tickvals=[0, 2, 4, 6, 8, 10],
-                                                   ticktext=['0%', '2%', '4%', '6%', '8%', '10%+'])))
+
+    fig_dict = fig.to_dict()
+
+    fig_dict["layout"]["updatemenus"] = [
+        {
+            "buttons": [
+                {
+                    "args": [None, {"frame": {"duration": 0, "redraw": True},
+                                    "fromcurrent": True}],
+                    "label": "Play",
+                    "method": "animate"
+                },
+                {
+                    "args": [[None], {"frame": {"duration": 0, "redraw": False},
+                                      "mode": "immediate",
+                                      "transition": {"duration": 0}}],
+                    "label": "Pause",
+                    "method": "animate"
+                }
+            ],
+            "direction": "left",
+            "pad": {"r": 10, "t": 50, 'b': 10},
+            "showactive": True,
+            "type": "buttons",
+            "x": 0.1,
+            "xanchor": "right",
+            "y": 0,
+            "yanchor": "top"
+        }
+    ]
+
+    fig_dict["layout"]["sliders"][0]['currentvalue'] = {
+        "font": {"size": 20, "family": 'Roboto'},
+        "prefix": "<b>Date: ", "suffix": "</b>",
+        "visible": True,
+        "xanchor": "right"
+    }
+    fig_dict["layout"]["sliders"][0]['len'] = 0.95
+    fig_dict['layout']['sliders'][0]['pad'] = {'b': 10, 't': 20, 'l': 10, 'r': 10}
+    fig_dict['layout']['sliders'][0]['transition'] = {"duration": 0, "easing": "linear"}
+    fig_dict['layout']['margin'] = {'b': 130, 'l': 0, 'r': 0, 't': 30}
+    fig_dict['layout']['coloraxis']['colorbar'] = {
+        'thickness': .035, 'thicknessmode': 'fraction', 'xpad': 5, 'ypad': 5,
+        'len': 0.75, 'lenmode': 'fraction',
+        # 'title':'Exposure Probability',
+        'tickvals':[0, 2, 4, 6, 8, 10],
+        'ticktext':['0%', '2%', '4%', '6%', '8%', '10%+']}
+
+    for frame in range(len(fig.frames)):
+        this_ht = fig_dict['frames'][frame]['data'][0]['hovertemplate'].replace('<br>dt=', '')
+        this_ht = this_ht.replace('<br>state=%{location}<extra></extra>', '%')
+        this_ht = this_ht.replace('Probability=', 'Exposure Probability: ')
+        fig_dict['frames'][frame]['data'][0]['hovertemplate'] = this_ht
+
+
+    fig = go.Figure(fig_dict)
+    fig.layout.sliders[0]['active'] = len(fig.frames) - 1
+    fig.update_traces(z=fig.frames[-1].data[0].z,
+                     hovertemplate=fig.frames[-1].data[0].hovertemplate)
 
     return fig
 
@@ -673,7 +793,7 @@ def ch_statemap2(df_chart, region_name, scale_max, counties, fitbounds='location
 
     chart_title = region_name + ': COVID-19 Cases Per 100k Residents'
 
-    fig = px.choropleth(df_chart.reset_index()[['fips','cases_per100k']].dropna(),
+    fig = px.choropleth(df_chart.reset_index()[['fips','county','cases_per100k']].dropna(),
                         geojson=counties,
                         locations='fips', color='cases_per100k',
                         color_continuous_scale="amp",
@@ -706,6 +826,7 @@ def ch_statemap_casechange(model_dict, df_counties, counties_geo, fitbounds='loc
     df_chart = df_chart.dropna(how='all', axis=1)
     df_chart = df_chart.apply(lambda x: x[x.last_valid_index()]).reset_index()
     df_chart = df_chart.rename(columns={0: 'cases_norm_14d_chg'})
+    df_chart['county'] = df_chart['county'] + ', ' + df_chart['state']
 
     scale_max = df_chart.cases_norm_14d_chg.quantile(.9)
 
@@ -725,7 +846,7 @@ def ch_statemap_casechange(model_dict, df_counties, counties_geo, fitbounds='loc
                         title=chart_title,
                         projection='albers usa',
                         hover_name='county',
-                        hover_data=['cases_norm_14d_chg'],
+                        hover_data={'cases_norm_14d_chg': ':.1f'},
                         labels={'cases_norm_14d_chg':'New Cases Per 100k'}
                         )
 
@@ -738,6 +859,22 @@ def ch_statemap_casechange(model_dict, df_counties, counties_geo, fitbounds='loc
 
     fig.update_traces(marker_line_width=marker_line_width, marker_opacity=1.0, marker_line_color='gray')
     fig.update_geos(fitbounds=fitbounds, visible=True, showsubunits=True, subunitcolor="black")
+
+    fig_dict = fig.to_dict()
+    fig_dict['layout']['margin'] = {'b': 50, 'l': 0, 'r': 0, 't': 30}
+    fig_dict['layout']['coloraxis']['colorbar'] = {'thickness': .035, 'thicknessmode': 'fraction', 'xpad': 5, 'ypad': 5,
+                                                   'len': 0.75, 'lenmode': 'fraction'}
+    fig_dict['data'][0]['hovertemplate'] = fig_dict['data'][0]['hovertemplate'].replace(
+        '<br><br>New Cases Per 100k=', '<br>New Cases Per 100k: ').replace(
+        '<br>fips=%{location}<extra></extra>', ''
+    )
+    import plotly.graph_objects as go
+    fig = go.Figure(fig_dict)
+    fig.update_layout(autosize=True)
+
+    if model_dict['region_code'] in ['US']:
+        fig.update_traces(marker_line_width=0, marker_opacity=0.8)
+        fig.update_geos(showsubunits=True, subunitcolor="black")
 
     return fig
 
@@ -785,6 +922,146 @@ def ch_statemap_casechange_anim(model_dict, df_counties, counties_geo, fitbounds
                       hovertemplate=None)
     fig.update_geos(fitbounds='locations', visible=True, showsubunits=True, subunitcolor="black")
     return fig
+
+def calc_trend(series, threshold):
+    df = series.rolling(14).mean() - series.rolling(28).mean().fillna(0)
+    df = pd.cut(df.stack(), [-np.inf, -1*threshold, threshold, np.inf], labels=['▼','','▲'])
+    return df.unstack().iloc[-1]
+
+def tab_summary(df_st_testing_fmt, df_fore_allstates, df_census, df_wavg_rt_conf_allregs):
+    df_tab = df_census[df_census.SUMLEV == 40].copy()
+    df_tab = df_tab.set_index('state')
+
+    # Deaths
+    df_tab['Total Deaths'] = df_st_testing_fmt['deaths'].fillna(method='ffill').iloc[-1]
+    df_tab['Total Deaths per 100k'] = df_tab['Total Deaths'].div(df_tab.pop2019).mul(1e5)
+    df_tab['14-Day Avg Daily Deaths'] = df_st_testing_fmt['deaths'].fillna(method='ffill').diff().rolling(14).mean().iloc[-1]
+    df_tab['14-Day Avg Daily Deaths per 100k'] = df_tab['14-Day Avg Daily Deaths'].div(df_tab.pop2019).mul(1e5)
+    df_tab['deaths_trend'] = calc_trend(
+        df_st_testing_fmt['deaths'].fillna(method='ffill').div(df_tab.pop2019).mul(1e5).diff(),
+        0.02)
+
+    # Cases
+    df_tab['Total Cases'] = df_st_testing_fmt['cases'].fillna(method='ffill').iloc[-1]
+    df_tab['Total Cases per 100k'] = df_tab['Total Cases'].div(df_tab.pop2019).mul(1e5)
+    df_tab['14-Day Avg Daily Cases'] = df_st_testing_fmt['cases'].fillna(method='ffill') \
+        .diff().rolling(14).mean().iloc[-1]
+    df_tab['14-Day Avg Daily Cases per 100k'] = df_tab['14-Day Avg Daily Cases'].div(df_tab.pop2019).mul(1e5)
+    df_tab['cases_trend'] = calc_trend(
+        df_st_testing_fmt['cases'].fillna(method='ffill').div(df_tab.pop2019).mul(1e5).diff(),
+        0.5)
+    # Positivity Rate
+    df_tab['Positivity Rate'] = df_st_testing_fmt['cases'].diff().rolling(14).sum().iloc[-1].div(
+        df_st_testing_fmt['posNeg'].diff().rolling(14).sum().iloc[-1])
+    df_tab['positivity_trend'] = calc_trend(
+        df_st_testing_fmt['cases'].diff().rolling(14).sum().div(
+            df_st_testing_fmt['posNeg'].diff().rolling(14).sum()),
+        0.005)
+    # Hospitalizations
+    df_tab['Hospitalized'] = df_st_testing_fmt['hospitalizedCurrently'].fillna(method='ffill').iloc[-1]
+    df_tab['Hospitalized per 100k'] = df_tab['Hospitalized'].div(df_tab.pop2019).mul(1e5)
+    df_tab['hospconcur_trend'] = calc_trend(
+        df_st_testing_fmt['hospitalizedCurrently'].fillna(method='ffill').div(df_tab.pop2019).mul(1e5),
+        0.5)
+    df_tab['14-Day Avg Daily Hosp Admits'] = df_st_testing_fmt['hospitalizedCumulative'].diff().fillna(method='ffill') \
+        .rolling(14).mean().iloc[-1]
+    df_tab['14-Day Avg Daily Hosp Admits per 100k'] = df_tab['14-Day Avg Daily Hosp Admits'].div(df_tab.pop2019).mul(1e5)
+    df_tab['hospadmits_trend'] = calc_trend(
+        df_st_testing_fmt['hospitalizedCumulative'].diff().fillna(method='ffill').div(df_tab.pop2019).mul(1e5),
+        0.05)
+
+    df_tab.loc[:, [col for col in df_tab.columns if '_trend' in col]] = df_tab.loc[:, [col for col in df_tab.columns if '_trend' in col]].fillna('')
+
+    # Modeled
+    df_tab['Model Est\'d Active Infections'] = \
+        df_fore_allstates[[col for col in df_fore_allstates.columns if col != 'US']] \
+            .unstack('dt').loc[['exposed', 'infectious']].T.sum(axis=1) \
+            .unstack(0).loc[pd.Timestamp.today().date()]
+    df_tab['Model Est\'d Active Infections per 100k'] = df_tab['Model Est\'d Active Infections'].div(df_tab.pop2019).mul(1e5)
+    df_tab = df_tab.sort_values(by='Model Est\'d Active Infections per 100k', ascending=False)
+    df_tab['Current Reproduction Rate (Rt)'] = df_wavg_rt_conf_allregs.unstack('metric').swaplevel(axis=1)['rt'].fillna(method='ffill').iloc[-1]
+
+    df_tab = df_tab.reset_index()
+    df_tab['Riskiest State Rank'] = df_tab.index + 1
+
+    # Formatting
+    # df_tab['State'] = df_tab.county  # + ' (' + df_tab.state + ')'
+    df_tab['State'] = '<a href="/forecasts/' + df_tab.state + '" target="_top">' + df_tab.county + '</a>'
+    dict_col_names = {'pop2019': 'Population'}
+    df_tab = df_tab.rename(columns=dict_col_names)
+
+    ## US Table ##
+    df_tab_us = pd.DataFrame(df_tab.sum(skipna=False)).T
+    df_tab_us['Positivity Rate'] = (df_st_testing_fmt['cases'].diff().rolling(14).sum().sum(axis=1).iloc[-1]
+                                    / df_st_testing_fmt['posNeg'].diff().rolling(14).sum().sum(axis=1).iloc[-1])
+    df_tab_us['Current Reproduction Rate (Rt)'] = df_wavg_rt_conf_allregs.unstack('metric').swaplevel(axis=1)['rt'].fillna(method='ffill')['US'].iloc[-1]
+    ##############
+
+    format_dict = {
+        'Riskiest State Rank': '{0:.0f}',
+        'Population': '{0:,.0f}',
+        'Model Est\'d Active Infections per 100k': '{0:,.0f}',
+        'Current Reproduction Rate (Rt)': '{0:.2f}',
+        'Total Cases per 100k': '{0:,.0f}',
+        '14-Day Avg Daily Cases per 100k': '{0:,.1f}',
+        'Positivity Rate': '{:.1%}',
+        'Total Deaths per 100k': '{0:,.0f}',
+        '14-Day Avg Daily Deaths per 100k': '{0:,.1f}',
+        'Hospitalized per 100k': '{0:,.2f}',
+        '14-Day Avg Daily Hosp Admits per 100k': '{0:,.2f}',
+        'Model Est\'d Active Infections': '{0:,.0f}',
+        'Total Cases': '{0:,.0f}',
+        '14-Day Avg Daily Cases': '{0:,.1f}',
+        'Total Deaths': '{0:,.0f}',
+        '14-Day Avg Daily Deaths': '{0:,.1f}',
+        'Hospitalized': '{0:,.0f}',
+        '14-Day Avg Daily Hosp Admits': '{0:,.2f}'
+                   }
+
+    for key, value in format_dict.items():
+        df_tab[key] = df_tab[key].map(value.format)
+        df_tab_us[key] = df_tab_us[key].map(value.format)
+
+    ## Add Trend Arrows ##
+    df_tab['14-Day Avg Daily Deaths per 100k'] = df_tab['14-Day Avg Daily Deaths per 100k'] \
+                                                 + df_tab['deaths_trend'].astype(str)
+    df_tab['14-Day Avg Daily Cases per 100k'] = df_tab['14-Day Avg Daily Cases per 100k'] \
+                                                + df_tab['cases_trend'].astype(str)
+    df_tab['Positivity Rate'] = df_tab['Positivity Rate'] \
+                                + df_tab['positivity_trend'].astype(str)
+    df_tab['Hospitalized per 100k'] = df_tab['Hospitalized per 100k'] \
+                                      + df_tab['hospconcur_trend'].astype(str)
+    df_tab['14-Day Avg Daily Hosp Admits per 100k'] = df_tab['14-Day Avg Daily Hosp Admits per 100k'] \
+                                                      + df_tab['hospadmits_trend'].astype(str)
+    df_tab['14-Day Avg Daily Deaths'] = df_tab['14-Day Avg Daily Deaths'] \
+                                                 + df_tab['deaths_trend'].astype(str)
+    df_tab['14-Day Avg Daily Cases'] = df_tab['14-Day Avg Daily Cases'] \
+                                                + df_tab['cases_trend'].astype(str)
+    df_tab['Hospitalized'] = df_tab['Hospitalized'] \
+                                      + df_tab['hospconcur_trend'].astype(str)
+    df_tab['14-Day Avg Daily Hosp Admits'] = df_tab['14-Day Avg Daily Hosp Admits'] \
+                                                      + df_tab['hospadmits_trend'].astype(str)
+    ######################
+
+    output_cols = ['Riskiest State Rank', 'State', 'Population',
+                   'Model Est\'d Active Infections per 100k', 'Current Reproduction Rate (Rt)',
+                   'Total Cases per 100k', '14-Day Avg Daily Cases per 100k',
+                   'Positivity Rate',
+                   'Total Deaths per 100k', '14-Day Avg Daily Deaths per 100k',
+                   'Hospitalized per 100k', '14-Day Avg Daily Hosp Admits per 100k'
+                   ]
+
+    tab_html = df_tab[output_cols].replace('nan','Not Available').to_html(index=False, border=0, justify='center', escape=False)
+    tab_html = tab_html.replace('<table', '<table class="w3-table w3-striped w3-hoverable w3-medium sortable"')
+
+    tab_header = "---\nlayout: noheader\n---\n"
+    tab_html = tab_header + '<script src="/assets/js/sorttable.js" type="text/javascript"></script>' \
+               + tab_html
+    tab_html = tab_html.replace('▼', '<span style="color: green">▼</span>').replace('▲',
+                                                                                    '<span style="color: red">▲</span>')
+
+    return tab_html, df_tab, df_tab_us
+
 
 def run_all_charts(model_dict, scenario_name='', pdf_out=False, show_charts=True, pub2web=False):
     model_dict['chart_title'] = "{0}: {1} Scenario".format(

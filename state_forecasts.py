@@ -25,12 +25,14 @@ df_jhu_counties = get_jhu_counties()
 df_st_testing_fmt = df_st_testing.copy()
 df_st_testing_fmt = df_st_testing_fmt.rename(columns={'death':'deaths','positive':'cases'}).unstack('code')
 
-df_interventions = get_state_policy_events()
+try:
+    df_interventions = get_state_policy_events()
+except:
+    df_interventions = pd.DataFrame()
 
 df_goog_mob_us = get_goog_mvmt_us()
+df_goog_mob_state = get_goog_mvmt_state(df_goog_mob_us)
 df_goog_mob_us = df_goog_mob_us[df_goog_mob_us.state.isnull()].set_index('dt')
-
-df_goog_mob_state = get_goog_mvmt_state()
 
 #######################
 
@@ -58,8 +60,10 @@ days_to_forecast = 150
 df_fore_allstates = pd.DataFrame()
 
 try:
-    df_prevfore_allstates = pd.read_pickle('./output/df_fore_allstates_{}.pkl'.format(
-        (pd.Timestamp.today() - pd.Timedelta(days=1)).strftime("%Y%m%d")))
+    list_of_files = glob.glob('./output/df_fore_allstates_*.pkl') # * means all if need specific format then *.csv
+    latest_file = max(list_of_files, key=os.path.getctime)
+    print('last forecast: ', latest_file)
+    df_prevfore_allstates = pd.read_pickle(latest_file)
 except:
     if 'df_fore_allstates' in globals().keys():
         if df_fore_allstates.shape[0] > 0:
@@ -99,10 +103,10 @@ for state in df_census.state.unique():
     print('Peak ICU #: {:.0f}'.format(df_agg.icu.max()))
     print('Peak Ventilator #: {:.0f}'.format(df_agg.vent.max()))
 
+    model_dict['chart_title'] = r'No Change in Future $R_{t}$ Until 20% Hospital Capacity Trigger'
+
     allstate_model_dicts[state] = model_dict
     df_fore_allstates = pd.concat([df_fore_allstates,pd.DataFrame(df_agg.stack(), columns=[state])], axis=1)
-
-    model_dict['chart_title'] = r'No Change in Future $R_{t}$ Until 20% Hospital Capacity Trigger'
 
 #######################
 
@@ -111,13 +115,22 @@ df_fore_us = df_fore_allstates.sum(axis=1, skipna=True).unstack('metric').dropna
 tot_pop = df_fore_us[['susceptible', 'deaths', 'exposed', 'hospitalized', 'infectious', 'recovered']].sum(axis=1)
 max_tot_pop = tot_pop.max()
 df_fore_us.loc[tot_pop<max_tot_pop, 'susceptible'] = df_fore_us['susceptible'] + (max_tot_pop - tot_pop)
-df_fore_allstates = pd.concat([df_fore_allstates,pd.DataFrame(df_fore_us.stack(), columns=['US'])], axis=1)
 
-model_dict = make_model_dict_us(df_census, df_st_testing_fmt, covid_params, d_to_forecast = 75,
+last_fore_dt = df_fore_allstates.sum(axis=1, skipna=False).unstack('metric').last_valid_index()
+df_fore_us = df_fore_us.loc[:last_fore_dt]
+
+df_fore_us_stack = pd.DataFrame(df_fore_us.stack(), columns=['US'])
+df_fore_allstates = pd.concat([df_fore_allstates, df_fore_us_stack], axis=1)
+
+model_dict = make_model_dict_us(df_census, df_st_testing_fmt, covid_params, d_to_forecast=75,
                                df_mvmt=df_goog_mob_us, df_interventions=df_interventions)
 model_dict['df_agg'] = df_fore_us
 model_dict['chart_title'] = r'No Change in Future $R_{t}$ Until 20% Hospital Capacity Trigger'
 allstate_model_dicts['US'] = model_dict
+
+this_reg_df_wavg = pd.DataFrame(
+    model_dict['df_rts_conf'].sort_index().unstack('metric')['weighted_average'].stack(), columns=['US'])
+df_wavg_rt_conf_allregs = pd.concat([df_wavg_rt_conf_allregs, this_reg_df_wavg], axis=1)
 ###################################################
 
 ### Save Output ###
@@ -139,6 +152,11 @@ df_fore_allstates.to_pickle('./output/df_fore_allstates_{}.pkl'.format(pd.Timest
 
 asmd_filename = './output/allstate_model_dicts_{}.pkl'.format(pd.Timestamp.today().strftime("%Y%m%d"))
 
+if df_interventions.shape[0] > 0:
+    df_interventions.to_csv('../COVIDoutlook/download/df_interventions.csv', encoding='utf-8')
+else:
+    print('!!!!!Could not update df_interventions!!!!')
+
 with open(asmd_filename, 'wb') as handle:
     pickle.dump(allstate_model_dicts, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
@@ -149,5 +167,5 @@ os.system('say -v "Victoria" "Your forecasts are ready."')
 
 ######################
 
-os.system('python web_gen_covidoutlook.py >> web_gen_covidoutlook.log &')
-os.system('python web_gen_personal.py >> web_gen_covidoutlook.log &')
+os.system('python web_gen_covidoutlook.py &') # 'python web_gen_covidoutlook.py 2>&1 | tee -a web_gen_covidoutlook.log &'
+os.system('python web_gen_personal.py &')

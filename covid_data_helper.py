@@ -90,6 +90,7 @@ def get_nyt_counties():
     df_reporting['dt'] = pd.to_datetime(df_reporting.date)
     df_reporting = df_reporting.drop(columns=['date'])
     df_reporting = df_reporting.set_index(['dt','state','county']).sort_index()
+    print('Got NYT county level data.')
     return df_reporting
 
 
@@ -103,7 +104,7 @@ def get_jhu_counties():
     df_jhu_counties = pd.concat(
         [process_jhu_counties(df_jhu_counties_cases_raw, 'cases'),
          process_jhu_counties(df_jhu_counties_deaths_raw, 'deaths')], axis=1)
-
+    print('Got JHU county level data.')
     return df_jhu_counties
 
 def process_jhu_counties(df_jhu_counties, series_name):
@@ -157,10 +158,12 @@ def get_nycdoh_data():
     return df_nycdoh
 
 def get_nycdoh_boro():
-    df_nycdoh_raw = pd.read_csv('https://raw.githubusercontent.com/nychealth/coronavirus-data/master/boro/boroughs-case-hosp-death.csv')
+    # df_nycdoh_raw = pd.read_csv('https://raw.githubusercontent.com/nychealth/coronavirus-data/master/boro/boroughs-case-hosp-death.csv')
+    df_nycdoh_raw = pd.read_csv(
+        'https://raw.githubusercontent.com/nychealth/coronavirus-data/master/trends/data-by-day.csv')
     df_nycdoh = df_nycdoh_raw
-    df_nycdoh['dt'] = pd.to_datetime(df_nycdoh['DATE_OF_INTEREST'])
-    df_nycdoh = df_nycdoh.drop(columns=['DATE_OF_INTEREST'])
+    df_nycdoh['dt'] = pd.to_datetime(df_nycdoh['date_of_interest'])
+    df_nycdoh = df_nycdoh.drop(columns=['date_of_interest'])
     df_nycdoh = df_nycdoh.set_index('dt').sort_index()
     df_nycdoh = df_nycdoh.stack().reset_index().rename(columns={'level_1': 'metric', 0: 'value'})
     df_nycdoh['county'] = df_nycdoh.metric.apply(lambda x: x[:2]).replace(
@@ -176,6 +179,7 @@ def get_nycdoh_boro():
     # df_nycdoh = pd.merge(df_nycdoh, df_census.loc[df_census['SUMLEV'] == 50,
     #                                               ['state', 'county', 'fips']], how='inner', on=['state', 'county'])
     # df_nycdoh['state'] = 'New York'
+    print('Got NYC DOH data')
     return df_nycdoh
 
 def get_nysdoh_data():
@@ -186,6 +190,7 @@ def get_nysdoh_data():
 
     df_nys_pub['dt'] = pd.to_datetime(df_nys_pub['test_date'])
     df_nys_pub = df_nys_pub.set_index(['county', 'dt']).drop(columns='test_date').sort_index()
+    print('Got NYS DOH data')
     return df_nys_pub
 
 def get_complete_county_data():
@@ -224,7 +229,7 @@ def get_complete_county_data():
 
     # df_counties = df_counties.set_index(['dt','state','county','fips']).sort_index()
 
-    df_goog_mob_cty = get_goog_mvmt_cty()
+    df_goog_mob_cty = get_goog_mvmt_cty(get_goog_mvmt_us())
     df_counties = pd.merge(df_counties[[x for x in df_counties.columns if x not in ['state','county']]],
                            df_goog_mob_cty, on=['dt','fips'], how='outer')
     df_counties = pd.merge(
@@ -232,17 +237,19 @@ def get_complete_county_data():
         df_counties,
         on='fips', how='inner')
     df_counties = df_counties.set_index(['dt', 'state', 'county', 'fips']).sort_index()
-
+    print('Got Complete County Data')
     return df_counties
 
 def get_covid19_tracking_data():
     df_st_testing_raw = pd.read_csv(
-    'https://raw.githubusercontent.com/COVID19Tracking/covid-tracking-data/master/data/states_daily_4pm_et.csv')
+    # 'https://raw.githubusercontent.com/COVID19Tracking/covid-tracking-data/master/data/states_daily_4pm_et.csv')
+        'https://api.covidtracking.com/v1/states/daily.csv')
     df_st_testing = df_st_testing_raw
     df_st_testing['dt'] = pd.to_datetime(df_st_testing['date'], format="%Y%m%d")
     print("State Testing Data Last Observation: ", df_st_testing.date.max())
     df_st_testing = df_st_testing.rename(columns={'state':'code'})
     df_st_testing = df_st_testing.set_index(['code','dt']).sort_index()
+    print('Got COVID19 Tracking Data')
     return df_st_testing
 
 def get_census_pop():
@@ -257,6 +264,7 @@ def get_census_pop():
     df_census['pop2019'] = pd.to_numeric(df_census.pop2019)
     df_census = df_census[['state','county','fips','SUMLEV', 'REGION','DIVISION', 'pop2019']]
     df_census['state'] = df_census['state'].replace(us_state_abbrev)
+    print('Got Census Data')
     return df_census
 
 def get_goog_mvmt_us():
@@ -272,10 +280,11 @@ def get_goog_mvmt_us():
     df_goog_mob_us['county'] = df_goog_mob_us['county'].str.replace(' Parish', '', regex=True
                                                                     ).replace(' County', '', regex=True)
     df_goog_mob_us['fips'] = df_goog_mob_us['fips'].fillna(0).astype(int).apply('{:0>5}'.format)
+    print('Got Google Movement Data')
     return df_goog_mob_us
 
-def get_goog_mvmt_cty():
-    df_goog_mob_us = get_goog_mvmt_us()
+def get_goog_mvmt_cty(df_goog_mob_us):
+    # df_goog_mob_us = get_goog_mvmt_us()
     # df_census = get_census_pop()
     # df_census = df_census.loc[df_census['SUMLEV'] == 50, ['state','county','fips']]
     mobility_cols = ['retail_and_recreation_percent_change_from_baseline',
@@ -294,8 +303,8 @@ def get_goog_mvmt_cty():
     # df_goog_mob_cty = df_goog_mob_cty.set_index(key_cols).sort_index()
     return df_goog_mob_cty
 
-def get_goog_mvmt_state():
-    df_goog_mob_us = get_goog_mvmt_us()
+def get_goog_mvmt_state(df_goog_mob_us):
+    # df_goog_mob_us = get_goog_mvmt_us()
     # df_census = get_census_pop()[['state', 'SUMLEV', 'REGION', 'DIVISION', 'pop2019']]
     mobility_cols = ['retail_and_recreation_percent_change_from_baseline',
                      'grocery_and_pharmacy_percent_change_from_baseline',
@@ -360,7 +369,10 @@ def get_state_policy_events():
         elif this_state != '' and thisstr.strip()[:4] not in ['http', '']:
 
             #         idx_before_urls = thisstr.find(':')
-            idx_before_urls = re.search("[A-Za-z]", thisstr).start()
+            if re.search("[A-Za-z]", thisstr) != None:
+                idx_before_urls = re.search("[A-Za-z]", thisstr).start()
+            else:
+                idx_before_urls = None
 
             dates = re.findall(r'\d+/\d+', thisstr[:idx_before_urls])
             if len(dates) > 0:
@@ -393,7 +405,7 @@ def get_state_policy_events():
     df_out = pd.concat([df_out, df_holidays])
 
     df_out['dt'] = pd.to_datetime(df_out['dt'])
-
+    print('Got KFF Policy dates')
     return df_out
 
 def get_counties_geo():
@@ -401,4 +413,5 @@ def get_counties_geo():
     import json
     with urlopen('https://raw.githubusercontent.com/plotly/datasets/master/geojson-counties-fips.json') as response:
         counties = json.load(response)
+    print('Got counties geo json')
     return counties

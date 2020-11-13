@@ -6,7 +6,6 @@ from sklearn.linear_model import LinearRegression
 
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-import plotly.io as pio
 
 from covid_data_helper import *
 from coronita_chart_helper import *
@@ -14,6 +13,7 @@ from coronita_web_helper import *
 from coronita_bokeh_helper import *
 
 ### Settings and Functions for Personal Website ###
+# plt.style.use('file://Users/mdonnelly/repos/coronita/personal_covidoutlook.mplstyle')
 plt.style.use('ggplot')
 
 def footnote_str_maker():
@@ -25,30 +25,39 @@ def footnote_str_maker():
 def add_plotly_footnote(fig):
     fig.update_layout(
                   annotations=[
-                      dict(x = 0, y = -0.06,
-                           xref='paper', yref='paper', font_size=10, showarrow=False,
-                           xanchor='left', yanchor='auto', xshift=0, yshift=0,
-                            text='<a href="http://{0}">{0}</a> | twtr: <a href="https://twitter.com/COVIDoutlook">@COVIDoutlook</a> | '.format(
+                      dict(x = 0, y = 0,
+                           xref='paper', yref='paper', font_size=12, showarrow=False,
+                           xanchor='left', yanchor='top', xshift=0, yshift=0,
+                            text='<a href="http://{0}">{0}</a> | twtr: <a href="https://twitter.com/COVIDoutlook">@COVIDoutlook</a>'.format(
                            'www.COVIDoutlook.info')
                           ),
-                      dict(x = 0, y = -0.09,
+                      dict(x = 0, y = -0.05,
                            xref='paper', yref='paper', font_size=10, showarrow=False,
-                           xanchor='left', yanchor='auto', xshift=0, yshift=0,
+                           xanchor='left', yanchor='top', xshift=0, yshift=0,
                            text='Chart created on {}'.format(pd.Timestamp.today().strftime("%d %b %Y"))
                           )
                   ]
                  )
+    fig.add_layout_image(
+    dict(
+        source="https://raw.githubusercontent.com/donnellymjd/COVIDoutlook/master/assets/img/logo-whiteonblack.png", #"https://raw.githubusercontent.com/cldougl/plot_images/add_r_img/vox.png",
+        xref="paper", yref="paper",
+        x=0, y=0,
+        sizex=0.15, sizey=0.15,
+        xanchor="left", yanchor="bottom",
+        layer='above'
+    )
+)
     return fig
 
 state_md_template = '''---
 title: {0}
-layout: noheader
+layout: statereport
 statecode: {1}
 ---
 ## {0}
 {2}
 '''
-
 
 #####################################
 
@@ -70,9 +79,8 @@ df_st_testing_fmt = df_st_testing_fmt.rename(columns={'death':'deaths','positive
 df_interventions = get_state_policy_events()
 
 df_goog_mob_us = get_goog_mvmt_us()
+df_goog_mob_state = get_goog_mvmt_state(df_goog_mob_us)
 df_goog_mob_us = df_goog_mob_us[df_goog_mob_us.state.isnull()].set_index('dt')
-
-df_goog_mob_state = get_goog_mvmt_state()
 
 list_of_files = glob.glob('./output/df_fore_allstates_*.pkl') # * means all if need specific format then *.csv
 latest_file = max(list_of_files, key=os.path.getctime)
@@ -101,6 +109,13 @@ df_wavg_rt_conf_allregs = pd.read_pickle(latest_file)
 fig = ch_exposure_prob_anim(df_fore_allstates, df_census)
 fig = add_plotly_footnote(fig)
 fig.write_html('../COVIDoutlook/forecasts/plotly/ch_exposure_prob.html', include_plotlyjs='cdn')
+fig.write_image('../COVIDoutlook/assets/images/covid19/ch_exposure_prob.png')
+
+tab_html, df_tab, df_tab_us = tab_summary(df_st_testing_fmt, df_fore_allstates, df_census, df_wavg_rt_conf_allregs)
+text_file = open("../COVIDoutlook/forecasts/plotly/summ_tab.html", "w")
+text_file.write(tab_html)
+text_file.close()
+df_tab.to_csv('../COVIDoutlook/download/state_data_summary_tab.csv', encoding='utf-8')
 
 ## Compare Exposures ##
 layout = bk_compare_exposures(df_census, df_fore_allstates)
@@ -118,7 +133,7 @@ resources = CDN.render()
 template = Template('''---
 layout: page
 title: Compare States
-image: duotone2.png
+banner: duotone2.png
 ---
 {{ resources }}
 {{ script }}
@@ -193,7 +208,8 @@ resources = CDN.render()
 template = Template('''---
 layout: page
 title: Home - US Overview
-image: duotone-us.png
+banner: duotone-us.png
+image: https://www.covidoutlook.info/assets/images/covid19/ch_exposure_prob.png
 ---
 {{ resources }}
 {{ script }}
@@ -208,29 +224,38 @@ image: duotone-us.png
     </div>
 </div>
 <hr>
-{% for chart in div[2:-1] %}
-    <div class="w3-container">
-        {{ chart }}
-    </div>
-    <hr>
-{% endfor %}
-<div>
+<div class="w3-container">
+    {{ div[2] }}
+</div>
+<hr>
+<div class="w3-container">
     <iframe
     src="forecasts/plotly/ch_exposure_prob.html"
-    style="margin:0; width:100%; height:800px; border:none;" scrolling="auto" sandbox="allow-scripts"
-    onload="AdjustIframeHeightOnLoad()"></iframe>
+    style="margin:0; width:100%; height:500px; border:none;" scrolling="auto" sandbox="allow-scripts"
+    ></iframe>
+</div>
+<hr>
+<div>
+    <h3> State Data Summary Table </h3>
+    <iframe
+    src="forecasts/plotly/summ_tab.html" scrolling="auto"
+    style="margin:0; width:100%; height:500px; border:none;overflow-x:hidden;overflow-y:scroll;"
+    sandbox="allow-scripts allow-top-navigation-by-user-activation"
+    ></iframe>
 </div>
 <hr>
 <div>
     <iframe
     src="forecasts/plotly/US_casepercap_cnty_map.html"
     style="margin:0; width:100%; height:800px; border:none;" scrolling="auto" sandbox="allow-scripts"
-    onload="AdjustIframeHeightOnLoad()"></iframe>
+    ></iframe>
 </div>
-<hr>
-<div class="w3-container">
-    {{ div[-1] }}
-</div>
+{% for chart in div[3:] %}
+    <hr>
+    <div class="w3-container">
+        {{ chart }}
+    </div>  
+{% endfor %}
 ''')
 
 resources = CDN.render()
@@ -280,7 +305,7 @@ resources = CDN.render()
 template = Template('''---
 layout: page
 title: Reproduction Rates
-image: duotone4.png
+banner: duotone4.png
 ---
 {{ resources }}
 {{ script }}
@@ -353,12 +378,6 @@ for state_code in list(df_census.state.unique()) + ['US']:
     fig.write_html('../COVIDoutlook/forecasts/plotly/{}_casepercap_cnty_map.html'.format(
         model_dict['region_code']), include_plotlyjs='cdn')
 
-    try:
-        pio.orca.shutdown_server()
-        fig.write_image(cover_file, scale=2)
-    except:
-        pio.orca.shutdown_server()
-
     for ch_name, ch_fn in d_chart_fns.items():
         try:
             ax = ch_fn(model_dict)
@@ -366,12 +385,29 @@ for state_code in list(df_census.state.unique()) + ['US']:
                 model_dict['region_code'], ch_name)
             plt.savefig(filename, bbox_inches='tight')
             plt.close()
-            os.system('optipng {} &'.format(filename))
+            # os.system('optipng {} &'.format(filename))
         except:
             print('Couldn\'t create {} {} chart.'.format(model_dict['region_code'], ch_name))
 
+    statetab_output_cols = ['Riskiest State Rank', 'Population',
+                   'Model Est\'d Active Infections', 'Current Reproduction Rate (Rt)',
+                   'Total Cases', '14-Day Avg Daily Cases',
+                   'Positivity Rate',
+                   'Total Deaths', '14-Day Avg Daily Deaths',
+                   'Hospitalized', '14-Day Avg Daily Hosp Admits'
+                   ]
+    if state_code == 'US':
+        statetab = df_tab_us[statetab_output_cols[1:]].replace('nan', 'Not Available')
+    else:
+        statetab = df_tab.loc[df_tab.state==state_code, statetab_output_cols].replace('nan', 'Not Available')
 
-    l_content = ['### How Fast is COVID-19 Currently Spreading?']
+    statetab_html = statetab.to_html(index=False, border=0, justify='center', escape=False)
+    statetab_html = statetab_html.replace(
+        'class="dataframe"', 'class="w3-table w3-striped w3-bordered w3-hoverable w3-medium"')
+    statetab_html = statetab_html.replace(
+        '<tr style="text-align: center;">', '<tr style="text-align: center;" class="w3-light-grey">')
+
+    l_content = [statetab_html, '### How Fast is COVID-19 Currently Spreading?']
 
     for thischart in l_charts:
         if thischart == 'ch_statemap':
@@ -386,10 +422,12 @@ for state_code in list(df_census.state.unique()) + ['US']:
 
     l_content.insert(15, '### Model and Forecast Results')
 
-
     final_md = state_md_template.format(model_dict['region_name'], state_code, '\n'.join(l_content))
 
-    filename = "../COVIDoutlook/forecasts/{}.md".format(state_code)
+    if state_code == 'US':
+        filename = "../COVIDoutlook/forecasts/index.md".format(state_code)
+    else:
+        filename = "../COVIDoutlook/forecasts/{}.md".format(state_code)
 
     with open(filename, "w") as file:
         file.write(final_md)
@@ -401,9 +439,12 @@ for state_code in list(df_census.state.unique()) + ['US']:
 download_header = """---
 layout: page
 title: Data
-image: duotone5.png
+banner: duotone5.png
 ---
 This data page, like the rest of the site, is brand new. Unfortunately, it's not fully functional yet. Please check back here soon for downloadable datasets of the forecasts and other data displayed on this website.
+
+### Reference Downloads (comma separated values)
+ - [COVID-19 Related Policy Actions by State - Source: KFF.org](https://raw.githubusercontent.com/donnellymjd/COVIDoutlook/master/download/df_interventions.csv)
 
 ### Forecast Downloads (comma separated values)
 {}
@@ -422,7 +463,7 @@ output_md = []
 
 for key in reversed(sorted(file_dict.keys())):
     this_file = file_dict[key]
-    output_md.append(' - [Forecast published on {0}]({1})'.format(this_file[1], this_file[0][15:]))
+    output_md.append(' - [Forecast published on {0}](https://raw.githubusercontent.com/donnellymjd/COVIDoutlook/master{1})'.format(this_file[1], this_file[0][15:]))
 
 final_md = download_header.format('\n'.join(output_md))
 
@@ -443,7 +484,7 @@ status_out = subprocess.check_output('git add download/*.csv', cwd=git_dir, shel
 commit_out = subprocess.check_output(git_commit_cmd, cwd=git_dir, shell=True).decode()
 print(commit_out)
 push_out = subprocess.check_output('git push', cwd=git_dir, shell=True).decode()
-push_out = subprocess.check_output('git push heroku master', cwd=git_dir, shell=True).decode()
+# push_out = subprocess.check_output('git push heroku master', cwd=git_dir, shell=True).decode()
 print(push_out)
 
 os.system('say -v "Victoria" "COVID Outlook dot info has been updated."')
