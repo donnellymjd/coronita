@@ -46,6 +46,15 @@ dict_ch_defs['ch_hosp'] = """Hospitalization and Deaths Forecast
 : The core model output is an estimate of the number of COVID-19 hospitalizations and deaths. More information on the methodology of this model is available on the [model methodology page](http://www.michaeldonnel.ly/covid19/methodology/). Concurrent hospitalizations refers to the number of COVID-19 cases estimated/forecast to be in the hospital on any given day. Deaths represents the model's estimate for the total number of deaths to have occurred by a given date. ICU cases are treated as a subset of hospitalizations and ventilations are treated as a subset of ICU cases.
 """
 
+dict_ch_defs['ch_hosp_concur'] = """Hospitalization and Deaths Forecast
+: The core model output is an estimate of the number of COVID-19 hospitalizations. More information on the methodology of this model is available on the [model methodology page](http://www.michaeldonnel.ly/covid19/methodology/). Concurrent hospitalizations refers to the number of COVID-19 cases estimated/forecast to be in the hospital on any given day. ICU cases are treated as a subset of hospitalizations and ventilations are treated as a subset of ICU cases.
+"""
+
+
+dict_ch_defs['ch_deaths_tot'] = """Total Deaths Forecast
+: The core model output is an estimate of the cumulative number of COVID-19 deaths. More information on the methodology of this model is available on the [model methodology page](http://www.michaeldonnel.ly/covid19/methodology/). Deaths represents the model's estimate for the total number of deaths to have occurred by a given date. 
+"""
+
 dict_ch_defs['ch_population_share'] = """Population Overview Forecast
 : The forecasting model also outputs estimates of the percentage of the overall population that has a current COVID-19 infection, recovered from a past infection, died from COVID-19, or is currently susceptible because they have not been previously infected. (Currently, since no vaccine exists, the entire uninfected population is represented as susceptible.) More information on the methodology of this model is available on the [model methodology page](http://www.michaeldonnel.ly/covid19/methodology/).
 """

@@ -92,7 +92,9 @@ for state in df_census.state.unique():
     try:
         first_guess = df_prevfore_allstates[state].first_valid_index()[0]
     except:
-        first_guess = pd.Timestamp('2020-02-17')
+        # first_guess = pd.Timestamp('2020-02-17')
+        local_r0_date = model_dict['df_rts'].loc['2020-02-01':'2020-04-30', 'weighted_average'].idxmax()
+        first_guess = local_r0_date - pd.Timedelta(days=28)
 
     model_dict = model_find_start(first_guess, model_dict)
     df_agg = model_dict['df_agg']

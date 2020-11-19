@@ -31,6 +31,18 @@ def outlier_removal(raw_series, num_std=3):
 
     return cleaned_series
 
+def lvl_adj_forecast(model_dict, hist_lvl_name, fore_lvl_name):
+    df_agg = model_dict['df_agg'].copy()
+    hist_last_day = model_dict['df_hist'][hist_lvl_name].last_valid_index()
+    fore_diff_future = df_agg[fore_lvl_name].diff().loc[hist_last_day + pd.Timedelta(days=1):]
+    fore_lvl_adjusted = fore_diff_future.cumsum().add(model_dict['df_hist'][hist_lvl_name].loc[hist_last_day])
+
+    df_agg[fore_lvl_name+'_fitted'] = df_agg[fore_lvl_name]
+    df_agg[fore_lvl_name] = fore_lvl_adjusted
+    df_agg[fore_lvl_name] = df_agg[fore_lvl_name].fillna(df_agg[fore_lvl_name+'_fitted'])
+    model_dict['df_agg'] = df_agg
+    return model_dict
+
 def daily_cohort_model(cohort_strt, d_to_fore, covid_params, E_0, I_0=0):
     t = np.linspace(0, int(d_to_fore) - 1, int(d_to_fore))
 
@@ -148,10 +160,13 @@ def seir_model_cohort(start_dt, model_dict, exposed_0=100, infectious_0=100):
 
     r_t = pd.Series(np.nan, index=pd.date_range(start_dt,
                                                 start_dt + pd.Timedelta(days=model_dict['d_to_forecast']) ) )
+
     if 'rt_scenario' in model_dict['df_rts'].columns:
         r_t = r_t.fillna(model_dict['df_rts']['rt_scenario']).fillna(method='bfill').fillna(method='ffill')
     else:
-        r_t = r_t.fillna(model_dict['df_rts']['weighted_average']).fillna(method='bfill').fillna(method='ffill')
+        local_r0_date = model_dict['df_rts'].loc['2020-02-01':'2020-04-30', 'weighted_average'].idxmax()
+        r_t = r_t.fillna(model_dict['df_rts'].loc[local_r0_date:, 'weighted_average'])
+        r_t = r_t.fillna(method='bfill').fillna(method='ffill')
 
     model_dict['df_rts'] = model_dict['df_rts'].reindex(r_t.index)
     model_dict['df_rts']['policy_triggered'] = 0
@@ -163,8 +178,13 @@ def seir_model_cohort(start_dt, model_dict, exposed_0=100, infectious_0=100):
 
         if (model_dict['covid_params']['policy_trigger']
                 and (cohort_strt > model_dict['df_rts']['weighted_average'].last_valid_index()) ):
-            tot_hosp_capacity = model_dict['tot_pop']/1000 * 2.7
-            covid_hosp_capacity = tot_hosp_capacity*0.2
+
+            if 'hosp_beds_avail' in model_dict['df_hist'].columns:
+                covid_hosp_capacity = model_dict['df_hist']['hosp_beds_avail'].rolling(7).mean().dropna().iloc[-1]
+            else:
+                tot_hosp_capacity = model_dict['tot_pop']/1000 * 2.7
+                covid_hosp_capacity = tot_hosp_capacity * 0.2
+
             if ( (next_hospitalized > covid_hosp_capacity)
                     or (model_dict['covid_params']['policy_trigger_once']
                         and model_dict['df_rts']['policy_triggered'].sum() > 1) ):
@@ -245,9 +265,13 @@ def seir_model_cohort(start_dt, model_dict, exposed_0=100, infectious_0=100):
     df_agg['susceptible'] = pd.Series(s_suspop)
     exposed_daily = df_all_cohorts.stack().unstack(['metric'])[['exposed']].reset_index()
     df_agg['exposed_daily'] = exposed_daily[(exposed_daily.dt == exposed_daily.cohort_dt)].set_index(['dt'])['exposed']
+    df_agg['deaths_daily'] = df_agg['deaths'].diff()
 
     model_dict['df_agg'] = df_agg.dropna()
     model_dict['df_all_cohorts'] = df_all_cohorts
+
+    model_dict = lvl_adj_forecast(model_dict, 'hosp_concur', 'hospitalized')
+    model_dict = lvl_adj_forecast(model_dict, 'deaths_tot', 'deaths')
 
     return model_dict
 
@@ -255,11 +279,13 @@ def model_find_start(this_guess, model_dict, exposed_0=None, infectious_0=None):
     from sklearn.metrics import mean_squared_error
     # from sklearn.metrics import mean_absolute_error
 
+    this_guess = pd.Timestamp(this_guess)
+
     first_hist_obs = model_dict['df_hist'][
         ['deaths_daily', 'cases_daily', 'hosp_admits', 'hosp_concur']].replace(0, np.nan).first_valid_index()
     this_guess = min(
-        max(this_guess, first_hist_obs + pd.Timedelta(days=-45)),
-        first_hist_obs + pd.Timedelta(days=15) )
+        max(this_guess, first_hist_obs - pd.Timedelta(days=45)),
+        first_hist_obs + pd.Timedelta(days=45) )
 
     last_guess = this_guess
     rmses = pd.Series(dtype='float64')
@@ -275,7 +301,7 @@ def model_find_start(this_guess, model_dict, exposed_0=None, infectious_0=None):
     # Change in error used to be < 0, but this makes a req for a big enough change.
     while ( (change_in_error <= -1)
             and ( this_guess >= ( first_hist_obs + pd.Timedelta(days=-45) ) )
-            and ( this_guess <= ( first_hist_obs + pd.Timedelta(days=15) ) )
+            and ( this_guess <= ( first_hist_obs + pd.Timedelta(days=45) ) )
     ):
         print('This guess: ', this_guess)
         model_dict['d_to_forecast'] = (pd.Timestamp.today() - this_guess).days
@@ -292,6 +318,7 @@ def model_find_start(this_guess, model_dict, exposed_0=None, infectious_0=None):
             df_compare['pred_metric'] = df_agg['hospitalized']
 
         df_compare = df_compare.dropna()
+        df_compare = df_compare.iloc[-60:]
         rmses.loc[this_guess] = np.sqrt(mean_squared_error(df_compare['obs_metric'], df_compare['pred_metric']))
 
         print('This error: ', rmses.loc[this_guess])
@@ -302,11 +329,17 @@ def model_find_start(this_guess, model_dict, exposed_0=None, infectious_0=None):
 
         last_guess = this_guess
         avg_error = df_compare['obs_metric'].sub(df_compare['pred_metric']).mean()
-        # print(avg_error)
+        print('Average Error: ', avg_error)
         if avg_error < 0:
             this_guess = this_guess + pd.Timedelta(days=1)
         else:
             this_guess = this_guess - pd.Timedelta(days=1)
+
+        # from coronita_chart_helper import ch_deaths_tot, ch_exposed_infectious
+        # import matplotlib.pyplot as plt
+        # ch_deaths_tot(model_dict); plt.show()
+        # ch_exposed_infectious(model_dict);
+        # plt.show()
 
     model_dict = orig_model_dict
     model_dict['d_to_forecast'] = (pd.Timestamp.today() - this_guess).days + model_dict['d_to_forecast']

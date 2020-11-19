@@ -53,35 +53,57 @@ def add_event_lines(ax, df_interventions):
 
     return
 
+def add_logo(ax):
+    logo = mpl.image.imread(
+        "./data/logo_wonb_small.png")
+    imagebox = mpl.offsetbox.OffsetImage(logo)
+    imagebox.image.axes = ax
+    ab = mpl.offsetbox.AnnotationBbox(
+        offsetbox=imagebox, xy=(0, 0), xybox=(50, -70),
+        xycoords='axes fraction', boxcoords='offset points', pad=0)
+    ax.add_artist(ab)
+    return ax
+
 def bar_and_line_chart(bar_series, bar_name='', bar_color='#008fd5',
                        line_series = False, line_name='', line_color='#fc4f30',
                        chart_title='', yformat='{:.1%}',
                        bar2_series = None, bar2_name='', bar2_color='#e5ae38', footnote_str=''):
     fig, ax = plt.subplots(figsize=(14, 8))
-    ax.bar(bar_series.index, bar_series, color=bar_color, label=bar_name)
+    ax.bar(bar_series.index, bar_series, color=bar_color, label=bar_name, width=1.0)
     if isinstance(bar2_series, pd.Series):
-        ax.bar(bar2_series.index, bar2_series, color=bar2_color, label=bar2_name)
+        ax.bar(bar2_series.index, bar2_series, color=bar2_color, label=bar2_name, width=1.0)
 
     ax.plot(line_series.index, line_series, linestyle='-', color=line_color, label=line_name)
 
     # set ticks every week
-    ax.xaxis.set_major_locator(mpl.dates.WeekdayLocator())
+    # ax.xaxis.set_major_locator(mpl.dates.WeekdayLocator())
     # set major ticks format
-    ax.xaxis.set_major_formatter(mpl.dates.DateFormatter('%b %d'))
+    # ax.xaxis.set_major_formatter(mpl.dates.DateFormatter('%b %d'))
+
+    locator = mpl.dates.AutoDateLocator()
+    formatter = mpl.dates.ConciseDateFormatter(locator)
+    ax.xaxis.set_major_locator(locator)
+    ax.xaxis.set_major_formatter(formatter)
+    plt.xticks(rotation=45)
 
     ax.set_yticklabels([yformat.format(y) for y in ax.get_yticks()])
-    plt.xticks(rotation=45)
+
     ax.set_xlabel('')
     ax.set_title(chart_title)
 
     handles, labels = ax.get_legend_handles_labels()
+    ax.yaxis.set_tick_params(labelright=True, labelleft=True)
 
     # reverse the order
     ax.legend(title='Legend', handles=handles[::-1], labels=labels[::-1])
 
-    
-    plt.annotate(footnote_str,
-                 (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
+    if footnote_str[:21] == 'www.COVIDoutlook.info':
+        ax = add_logo(ax)
+        plt.annotate(footnote_str,
+                     (0, 0), (125, -80), xycoords='axes fraction', textcoords='offset points', va='top')
+    else:
+        plt.annotate(footnote_str,
+                     (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
 
     return ax
 
@@ -177,52 +199,64 @@ def ch_cumul_infections(model_dict):
     df_chart = df_chart.clip(lower=0)
     df_chart = df_chart.iloc[8:]
 
-    ax = df_chart.plot(figsize=[14, 8], title=model_dict['region_name']+': Cumulative Infections Forecast\n'+model_dict['chart_title'],
-                       legend=True, label='Forecast Cumulative Infections',
-                       color=['black'])
-    ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0f}'))
+    ax = bar_and_line_chart(bar_series=model_dict['df_hist']['cases_tot'].dropna(how='all'),
+                            bar_name='Reported Total Cases', bar_color='#737373',
+                            line_series=df_chart, line_color='#000000',
+                            line_name='Forecast Total Infections', yformat='{:0,.0f}',
+                            chart_title=model_dict['region_name']+': Cumulative Infections Forecast\n'+model_dict['chart_title'],
+                            footnote_str=model_dict['footnote_str']
+                            )
 
-    if 'cases_tot' in model_dict['df_hist'].columns:
-        model_dict['df_hist']['cases_tot'].loc[df_chart.index[0]:].plot(
-            ax=ax, linestyle=':', legend=True, color=['black'],
-            label='Reported Cumulative Infections')
+    _ = ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0f}'))
     ax.set_ylim([0, ax.get_ylim()[1]])
     plt.legend(title='Legend', loc='upper left', bbox_to_anchor=(1.07, 0.95), ncol=1)
     ax.text(1.08, 0.05, param_str, transform=ax.transAxes,
             verticalalignment='bottom', bbox={'ec': 'black', 'lw': 1})
     ax.set_xlabel('')
-    
-    plt.annotate(model_dict['footnote_str'],
-                 (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
     ax = today_vline(ax)
     return ax
 
 def ch_daily_exposures(model_dict):
+    reported_name = 'cases_tot'
+    forecast_name = 'exposed_daily'
+    full_name = 'Daily Exposures'
 
     param_str = param_str_maker(model_dict)
     df_agg = model_dict['df_agg']
 
-    df_chart = df_agg['exposed_daily'].dropna(how='all')
+    line_series = df_agg[forecast_name].dropna(how='all')
 
-    ax = df_chart.plot(figsize=[14, 8], title=model_dict['region_name']+': Daily Exposures Forecast\n'+model_dict['chart_title'],
-                       legend=True, color=['#e5ae38'],
-                       label='Forecast Daily New Infections (Exposed)')
-    ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0f}'))
+    if reported_name in model_dict['df_hist'].columns:
+        bar_series = model_dict['df_hist'][reported_name].diff().dropna(how='all')
+    else:
+        bar_series = pd.Series(index=model_dict['df_hist'].index)
 
-    if 'cases_tot' in model_dict['df_hist'].columns:
-        model_dict['df_hist']['cases_tot'].loc[df_chart.index[0]:].diff().plot(
-            ax=ax, linestyle=':', legend=True, color=['#e5ae38'],
-            label='Reported Daily New Infections (Exposed)')
+    ax = bar_and_line_chart(bar_series=bar_series,
+                            bar_name='Reported',
+                            bar_color='#f3daa5',
+                            line_series=line_series,
+                            line_color='#e5ae38',
+                            line_name='Forecast',
+                            yformat='{:0,.0f}',
+                            chart_title=model_dict['region_name']+': {}\n{}'.format(
+                                full_name, model_dict['chart_title']),
+                            footnote_str=model_dict['footnote_str']
+                            )
 
+    _ = ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0f}'))
     ax.set_ylim([0, ax.get_ylim()[1]])
+
+    if reported_name in model_dict['df_hist'].columns:
+        if bar_series.max() > outlier_removal(bar_series).max():
+            ax.set_ylim([0, 1.1 * max(outlier_removal(bar_series).max(),
+                                      line_series.max())])
+
     plt.legend(title='Legend', loc='upper left', bbox_to_anchor=(1.07, 0.95), ncol=1)
     ax.text(1.08, 0.05, param_str, transform=ax.transAxes,
             verticalalignment='bottom', bbox={'ec': 'black', 'lw': 1})
     ax.set_xlabel('')
-    
-    plt.annotate(model_dict['footnote_str'],
-                 (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
     ax = today_vline(ax)
+
     return ax
 
 def ch_hosp(model_dict):
@@ -262,65 +296,216 @@ def ch_hosp(model_dict):
     ax = today_vline(ax)
     return ax
 
-def ch_hosp_admits(model_dict):
+
+def ch_hosp_concur(model_dict):
+    reported_name = 'hosp_concur'
+    forecast_name = 'hospitalized'
+    full_name = 'Concurrent Hospitalizations'
+
     param_str = param_str_maker(model_dict)
     df_agg = model_dict['df_agg']
 
-    df_chart = df_agg['hosp_admits'].dropna(how='all')
+    line_series = df_agg[forecast_name].dropna(how='all')
 
-    ax = df_chart.plot(figsize=[14, 8], title=model_dict['region_name']+': Daily Hospital Admissions Forecast\n'+model_dict['chart_title'],
-                       label='Forecast Hospital Admissions',
-                       color='#6d904f')
+    if reported_name in model_dict['df_hist'].columns:
+        bar_series = model_dict['df_hist'][reported_name].dropna(how='all')
+    else:
+        bar_series = pd.Series(index=model_dict['df_hist'].index)
+
+    ax = bar_and_line_chart(bar_series=bar_series,
+                            bar_name='Reported Hospitalizations',
+                            bar_color='#bed2ad',
+                            line_series=line_series,
+                            line_color='#6d904f',
+                            line_name='Forecast Hospitalizations',
+                            yformat='{:0,.0f}',
+                            chart_title=model_dict['region_name']+': {}\n{}'.format(
+                                full_name, model_dict['chart_title']),
+                            footnote_str=model_dict['footnote_str']
+                            )
+
+    df_chart = df_agg[['icu', 'vent']].dropna(how='all').copy()
+    df_chart = df_chart.rename(columns={'icu': 'Forecast ICU Cases',
+                                        'vent': 'Forecast Ventilations',
+                                        })
+
+    df_chart.plot(ax=ax,
+                       color=['#8b8b8b', '#810f7c'],
+                       label=['Forecast ICU Cases',
+                              'Forecast Ventilations'])
     _ = ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0f}'))
-    if 'hosp_admits' in model_dict['df_hist'].columns:
-        model_dict['df_hist']['hosp_admits'].plot(ax=ax, linestyle=':', legend=True,
-                                                  label='Reported Hospital Admissions',
-                                                  color='#6d904f'
-                                                  )
-        if model_dict['df_hist']['hosp_admits'].max() > outlier_removal(model_dict['df_hist']['hosp_admits']).max():
-            ax.set_ylim([0, 1.1 * max(outlier_removal(model_dict['df_hist']['hosp_admits']).max(), df_chart.max())])
+    ax.set_ylim([0, ax.get_ylim()[1]])
 
-    ax.set_ylim([0, max(ax.get_ylim()[1], 5)])
+    if reported_name in model_dict['df_hist'].columns:
+        if model_dict['df_hist'][reported_name].max() > outlier_removal(model_dict['df_hist'][reported_name]).max():
+            ax.set_ylim([0, 1.1 * max(outlier_removal(model_dict['df_hist'][reported_name]).max(),
+                                      df_agg[forecast_name].max())])
 
     plt.legend(title='Legend', loc='upper left', bbox_to_anchor=(1.07, 0.95), ncol=1)
     ax.text(1.08, 0.05, param_str, transform=ax.transAxes,
             verticalalignment='bottom', bbox={'ec': 'black', 'lw': 1})
     ax.set_xlabel('')
-    
-    plt.annotate(model_dict['footnote_str'],
-                 (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
+    ax = today_vline(ax)
+
+    if 'hosp_beds_avail' in model_dict['df_hist'].columns:
+        hosp_beds_avail = model_dict['df_hist']['hosp_beds_avail']
+        first_nonzero_idx = hosp_beds_avail.to_numpy().nonzero()[0][0]
+        total_beds4covid = model_dict['df_hist']['hosp_concur'].add(
+            hosp_beds_avail.iloc[first_nonzero_idx:]).rolling(7).mean()
+        total_beds4covid = total_beds4covid.reindex(model_dict['df_agg'].index)
+        total_beds4covid = total_beds4covid.fillna(method='ffill').fillna(method='bfill')
+        total_beds4covid.plot(ax=ax, legend=False, label='_nolegend_',
+                   linewidth=4.0,
+                   linestyle=(0, (1, 1)),
+                   color='#fc4f30',
+                   alpha=1)
+        ax.text(ax.get_xlim()[1] - 20,
+                total_beds4covid.iloc[-1] * 1.02,
+                'Est. Hospital Beds Available for COVID-19: {:,.0f}'.format(total_beds4covid.iloc[-1]),
+                horizontalalignment='right',
+                verticalalignment='bottom',
+                color='#fc4f30',
+                alpha=1)
+    else:
+        est_hosp_cap = model_dict['tot_pop'] / 1000 * 2.7 * 0.2
+        ax.axhline(est_hosp_cap,
+                   linewidth=4.0,
+                   linestyle=(0, (1, 1)),
+                   color='#fc4f30',
+                   alpha=1)
+        ax.text(ax.get_xlim()[0] + 10,
+                est_hosp_cap * 1.02,
+                'Est. Hospital Beds Available for COVID-19: {:,.0f}'.format(est_hosp_cap),
+                horizontalalignment='left',
+                verticalalignment='bottom',
+                color='#fc4f30',
+                alpha=1)
+    return ax
+
+def ch_hosp_admits(model_dict):
+    reported_name = 'hosp_admits'
+    forecast_name = 'hosp_admits'
+    full_name = 'Daily Hospital Admissions'
+
+    param_str = param_str_maker(model_dict)
+    df_agg = model_dict['df_agg']
+
+    if reported_name in model_dict['df_hist'].columns:
+        bar_series = model_dict['df_hist'][reported_name].dropna(how='all')
+    else:
+        bar_series = pd.Series(index=model_dict['df_hist'].index)
+
+    ax = bar_and_line_chart(bar_series=bar_series,
+                            bar_name='Reported',
+                            bar_color='#b1c99c',
+                            line_series=df_agg[forecast_name],
+                            line_color='#6d904f',
+                            line_name='Forecast',
+                            yformat='{:0,.0f}',
+                            chart_title=model_dict['region_name']+': Daily {}\n{}'.format(
+                                full_name, model_dict['chart_title']),
+                            footnote_str=model_dict['footnote_str']
+                            )
+
+    _ = ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0f}'))
+    ax.set_ylim([0, ax.get_ylim()[1]])
+
+    if reported_name in model_dict['df_hist'].columns:
+        if model_dict['df_hist'][reported_name].max() > outlier_removal(model_dict['df_hist'][reported_name]).max():
+            ax.set_ylim([0, 1.1 * max(outlier_removal(model_dict['df_hist'][reported_name]).max(),
+                                      df_agg[forecast_name].max())])
+
+    plt.legend(title='Legend', loc='upper left', bbox_to_anchor=(1.07, 0.95), ncol=1)
+    ax.text(1.08, 0.05, param_str, transform=ax.transAxes,
+            verticalalignment='bottom', bbox={'ec': 'black', 'lw': 1})
+    ax.set_xlabel('')
+    ax = today_vline(ax)
+    return ax
+
+def ch_deaths_tot(model_dict):
+    reported_name = 'deaths_tot'
+    forecast_name = 'deaths'
+    full_name = 'Total Deaths'
+
+    param_str = param_str_maker(model_dict)
+    df_agg = model_dict['df_agg']
+
+    if reported_name in model_dict['df_hist'].columns:
+        bar_series = model_dict['df_hist'][reported_name].dropna(how='all')
+    else:
+        bar_series = pd.Series(index=model_dict['df_hist'].index)
+
+    ax = bar_and_line_chart(bar_series=bar_series,
+                            bar_name='Reported',
+                            bar_color='#fda99b',
+                            line_series=df_agg[forecast_name],
+                            line_color='#fc4f30',
+                            line_name='Forecast',
+                            yformat='{:0,.0f}',
+                            chart_title=model_dict['region_name']+': {}\n{}'.format(
+                                full_name, model_dict['chart_title']),
+                            footnote_str=model_dict['footnote_str']
+                            )
+
+    _ = ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0f}'))
+    ax.set_ylim([0, ax.get_ylim()[1]])
+
+    if reported_name in model_dict['df_hist'].columns:
+        if model_dict['df_hist'][reported_name].max() > outlier_removal(model_dict['df_hist'][reported_name]).max():
+            ax.set_ylim([0, 1.1 * max(outlier_removal(model_dict['df_hist'][reported_name]).max(),
+                                      df_agg[forecast_name].max())])
+
+    plt.legend(title='Legend', loc='upper left', bbox_to_anchor=(1.07, 0.95), ncol=1)
+    ax.text(1.08, 0.05, param_str, transform=ax.transAxes,
+            verticalalignment='bottom', bbox={'ec': 'black', 'lw': 1})
+    ax.set_xlabel('')
     ax = today_vline(ax)
     return ax
 
 def ch_daily_deaths(model_dict):
+    reported_name = 'deaths_daily'
+    forecast_name = 'deaths'
+    full_name = 'Daily Deaths'
+
     param_str = param_str_maker(model_dict)
     df_agg = model_dict['df_agg']
 
-    df_chart = df_agg['deaths'].diff().dropna(how='all')
+    if 'deaths_daily' in df_agg.columns:
+        line_series = df_agg['deaths_daily'].dropna(how='all')
+    else:
+        line_series = df_agg[forecast_name].diff().dropna(how='all')
 
-    ax = df_chart.plot(figsize=[14, 8], title=model_dict['region_name']+': Daily Deaths Forecast\n'+model_dict['chart_title'],
-                       label='Forecast Daily Deaths',
-                       color='#fc4f30')
+    if reported_name in model_dict['df_hist'].columns:
+        bar_series = model_dict['df_hist'][reported_name].dropna(how='all')
+    else:
+        bar_series = pd.Series(index=model_dict['df_hist'].index)
+
+    ax = bar_and_line_chart(bar_series=bar_series,
+                            bar_name='Reported',
+                            bar_color='#fda99b',
+                            line_series=line_series,
+                            line_color='#fc4f30',
+                            line_name='Forecast',
+                            yformat='{:0,.0f}',
+                            chart_title=model_dict['region_name']+': {}\n{}'.format(
+                                full_name, model_dict['chart_title']),
+                            footnote_str=model_dict['footnote_str']
+                            )
 
     _ = ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0f}'))
-    if 'deaths_daily' in model_dict['df_hist'].columns:
-        model_dict['df_hist']['deaths_daily'].plot(ax=ax, linestyle=':', legend=True,
-                                                  label='Reported Daily Deaths',
-                                                  color='#fc4f30'
-                                                  )
-        if model_dict['df_hist']['deaths_daily'].max() > outlier_removal(model_dict['df_hist']['deaths_daily']).max():
-            ax.set_ylim([0, 1.1 * max(outlier_removal(model_dict['df_hist']['deaths_daily']).max(), df_chart.max())])
+    ax.set_ylim([0, ax.get_ylim()[1]])
 
-    ax.set_ylim([0, max(ax.get_ylim()[1], 5)])
+    if reported_name in model_dict['df_hist'].columns:
+        if bar_series.max() > outlier_removal(bar_series).max():
+            ax.set_ylim([0, 1.1 * max(outlier_removal(bar_series).max(),
+                                      line_series.max())])
 
     plt.legend(title='Legend', loc='upper left', bbox_to_anchor=(1.07, 0.95), ncol=1)
     ax.text(1.08, 0.05, param_str, transform=ax.transAxes,
             verticalalignment='bottom', bbox={'ec': 'black', 'lw': 1})
     ax.set_xlabel('')
-    
-    plt.annotate(model_dict['footnote_str'],
-                 (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
     ax = today_vline(ax)
+
     return ax
 
 def ch_doubling_rt(model_dict):
@@ -360,9 +545,15 @@ def ch_doubling_rt(model_dict):
     ax.set_xlabel('')
     ax.set_ylabel('Days til Doubling')
     ax.set_ylim(1, 1000)
+    ax.yaxis.set_tick_params(labelright=True, labelleft=True)
     
-    plt.annotate(model_dict['footnote_str'],
-                 (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
+    if model_dict['footnote_str'][:21] == 'www.COVIDoutlook.info':
+        ax = add_logo(ax)
+        plt.annotate(model_dict['footnote_str'],
+                     (0, 0), (125, -80), xycoords='axes fraction', textcoords='offset points', va='top')
+    else:
+        plt.annotate(model_dict['footnote_str'],
+                     (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
     return ax
 
 def ch_population_share(model_dict):
@@ -400,9 +591,14 @@ def ch_population_share(model_dict):
     ax.text(1.08, 0.05, param_str, transform=ax.transAxes,
             verticalalignment='bottom', bbox={'ec': 'black', 'lw': 1})
     ax.set_xlabel('')
-    
-    plt.annotate(model_dict['footnote_str'],
-                 (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
+
+    if model_dict['footnote_str'][:21] == 'www.COVIDoutlook.info':
+        ax = add_logo(ax)
+        plt.annotate(model_dict['footnote_str'],
+                     (0, 0), (125, -80), xycoords='axes fraction', textcoords='offset points', va='top')
+    else:
+        plt.annotate(model_dict['footnote_str'],
+                     (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
     ax = today_vline(ax)
     return ax
 
@@ -430,9 +626,15 @@ def ch_rts(model_dict):
     ax.text(1.08, 0.05, param_str, transform=ax.transAxes,
             verticalalignment='bottom', bbox={'ec': 'black', 'lw': 1})
     ax.set_xlabel('')
+    ax.yaxis.set_tick_params(labelright=True, labelleft=True)
     
-    plt.annotate(model_dict['footnote_str'],
-                 (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
+    if model_dict['footnote_str'][:21] == 'www.COVIDoutlook.info':
+        ax = add_logo(ax)
+        plt.annotate(model_dict['footnote_str'],
+                     (0, 0), (125, -80), xycoords='axes fraction', textcoords='offset points', va='top')
+    else:
+        plt.annotate(model_dict['footnote_str'],
+                     (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
     return ax
 
 def ch_rt_confid(model_dict):
@@ -461,9 +663,15 @@ def ch_rt_confid(model_dict):
     ax.text(1.08, 0.05, param_str, transform=ax.transAxes,
             verticalalignment='bottom', bbox={'ec': 'black', 'lw': 1})
     ax.set_xlabel('')
+    ax.yaxis.set_tick_params(labelright=True, labelleft=True)
     
-    plt.annotate(model_dict['footnote_str'],
-                 (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
+    if model_dict['footnote_str'][:21] == 'www.COVIDoutlook.info':
+        ax = add_logo(ax)
+        plt.annotate(model_dict['footnote_str'],
+                     (0, 0), (125, -80), xycoords='axes fraction', textcoords='offset points', va='top')
+    else:
+        plt.annotate(model_dict['footnote_str'],
+                     (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
 
     return ax
 
@@ -474,15 +682,16 @@ def ch_totaltests(model_dict):
                        line_name='7-Day Rolling Average', yformat='{:0,.0f}',
                        chart_title='{}: Total COVID-19 Tests Per Day'.format(model_dict['region_name']),
                        bar2_series=model_dict['df_hist']['cases_daily'], bar2_name='# of Positive Tests',
-                            footnote_str=model_dict['footnote_str']
+                            footnote_str=model_dict['footnote_str'],
+                        bar_color='#80d4ff', bar2_color='#f3daa5', line_color='#008fd5'
                        )
     return ax
 
 def ch_positivetests(model_dict):
     ax = bar_and_line_chart(bar_series=model_dict['df_hist']['cases_daily'].dropna(how='all'),
-                       bar_name='# of Positive Tests', bar_color='#e5ae38',
+                       bar_name='# of Positive Tests', bar_color='#f3daa5',
                        line_series=model_dict['df_hist']['cases_daily'].rolling(7, min_periods=1).mean(),
-                       line_name='7-Day Rolling Average', yformat='{:0,.0f}',
+                       line_name='7-Day Rolling Average', yformat='{:0,.0f}', line_color='#e5ae38',
                        chart_title='{}: Positive COVID-19 Tests Per Day'.format(model_dict['region_name']),
                             footnote_str=model_dict['footnote_str']
                        )
@@ -497,21 +706,23 @@ def ch_postestshare(model_dict):
 
     ax = df_chart[['cases_daily', 'neg_tests_daily']].plot(
         kind='area', stacked=True,
-        title='{}: COVID-19 Positivity Rate'.format(model_dict['region_name']),
-        figsize=[14, 8], color=['#e5ae38', '#008fd5'])
-    df_chart['sevendayavg'] = df_chart['cases_daily'].mask(df_chart['cases_daily']>=1.0
-                                                           ).rolling(7, min_periods=1).mean()
+        title='{}: COVID-19 Test Positivity Rate'.format(model_dict['region_name']),
+        figsize=[14, 8], color=['#e5ae38', '#008fd5'], alpha=.7)
     df_chart['sevendayavg'].plot(ax=ax, linestyle='-', color='#fc4f30')
-    ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0%}'))
-    locator = mdates.AutoDateLocator(minticks=3, maxticks=7)
-    formatter = mdates.ConciseDateFormatter(locator)
-    ax.xaxis.set_major_locator(locator)
-    ax.xaxis.set_major_formatter(formatter)
-    plt.legend(title='Legend', bbox_to_anchor=(1.07, 0.95), ncol=1,
-               labels=['% Positive Tests', '% Negative Tests', '7-Day Rolling Average - Positivity Rate'])
-    ax.set_ylim(0, min(1, df_chart['sevendayavg'].max() * 1.25))
     ax.set_xlim(ax.get_xlim()[0] + 10, ax.get_xlim()[1] - 10)
+    ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0%}'))
+    locator = mpl.dates.AutoDateLocator()
+    formatter = mpl.dates.ConciseDateFormatter(locator)
+    ax.xaxis.set_major_locator(locator)
+    if ax.get_xlim()[0]>1e5:
+        ax.xaxis.set_major_formatter(formatter)
+    plt.xticks(rotation=45)
+
+    plt.legend(title='Legend', bbox_to_anchor=(1.07, 0.95), ncol=1,
+               labels=['% Positive Tests', '% Negative Tests', 'Test Positivity Rate, 7-Day Rolling Average'])
+    ax.set_ylim(0, min(1, df_chart['sevendayavg'].max() * 1.25))
     ax.set_xlabel('')
+    ax.yaxis.set_tick_params(labelright=True, labelleft=True)
 
     inset_days = 90
 
@@ -521,7 +732,7 @@ def ch_postestshare(model_dict):
 
         df_chart[['cases_daily', 'neg_tests_daily']].plot(
             ax=axins, kind='area', stacked=True,
-            color=['#e5ae38', '#008fd5'], legend=False)
+            color=['#e5ae38', '#008fd5'], alpha=.7, legend=False)
         df_chart['sevendayavg'].plot(ax=axins, linestyle='-', color='#fc4f30', legend=False)
 
         if df_chart['sevendayavg'].iloc[-inset_days:].max() * 1.1 < .1:
@@ -537,13 +748,20 @@ def ch_postestshare(model_dict):
         months_fmt = mdates.DateFormatter('%b')
         axins.xaxis.set_major_locator(months)
         axins.xaxis.set_major_formatter(months_fmt)
+        axins.yaxis.set_tick_params(labelright=True, labelleft=True)
         mark_inset(ax, axins, loc1=3, loc2=4)
 
-    plt.annotate(model_dict['footnote_str'],
-                 (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
+    if model_dict['footnote_str'][:21] == 'www.COVIDoutlook.info':
+        ax = add_logo(ax)
+        plt.annotate(model_dict['footnote_str'],
+                     (0, 0), (125, -80), xycoords='axes fraction', textcoords='offset points', va='top')
+    else:
+        plt.annotate(model_dict['footnote_str'],
+                     (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
     return ax
 
 def ch_googmvmt(model_dict):
+    colors = ['#008fd5', '#fc4f30', '#e5ae38', '#6d904f', '#8b8b8b', '#810f7c']
     df_chart = model_dict['df_mvmt']
     df_chart = df_chart[['retail_and_recreation_percent_change_from_baseline',
          'grocery_and_pharmacy_percent_change_from_baseline',
@@ -556,13 +774,45 @@ def ch_googmvmt(model_dict):
     labels = [x[:-29].title().replace('_', ' ') for x in df_chart.columns]
 
     ax = df_chart.plot(title='{}: Google Movement Data\nRolling 7-day Average'.format(model_dict['region_name']),
-                       figsize=[14, 8], )
+                       figsize=[14, 8], color=colors)
+    # ax.set_ylim(ax.get_ylim()[0], df_chart['residential_percent_change_from_baseline'].max()*1.2)
     ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0%}'))
     plt.legend(title='Percent Change from Baseline', bbox_to_anchor=(1.07, 0.95), ncol=1, labels=labels)
     ax.set_xlabel('')
+    ax.yaxis.set_tick_params(labelright=True, labelleft=True)
 
-    plt.annotate(model_dict['footnote_str'],
-                 (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
+    if model_dict['footnote_str'][:21] == 'www.COVIDoutlook.info':
+        ax = add_logo(ax)
+        plt.annotate(model_dict['footnote_str'],
+                     (0, 0), (125, -80), xycoords='axes fraction', textcoords='offset points', va='top')
+    else:
+        plt.annotate(model_dict['footnote_str'],
+                     (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
+
+    #### INSET FOR RESIDENTIAL ####
+    if ax.get_ylim()[1] > df_chart['residential_percent_change_from_baseline'].max() * 2.0:
+        axins = inset_axes(ax, width="30%", height="30%", loc=2, borderpad=3,
+                           axes_kwargs={'alpha': 0.6, 'frame_on': True})
+
+        df_chart['residential_percent_change_from_baseline'].dropna().plot(
+            ax=axins, title='Residential Only',
+            color=colors[5], alpha=.7, legend=False)
+
+        axins.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0%}'))
+
+        # axins.set_ylim(df_chart['residential_percent_change_from_baseline'].min(),
+        #                min(1, df_chart.iloc[inset_days * -1:]['sevendayavg'].max() * 1.25))
+        # axins.set_xlim(axins.get_xlim()[1] - inset_days - 10, axins.get_xlim()[1] - 10)
+        axins.set_xlabel('')
+
+        months = mdates.MonthLocator()  # every month
+        months_fmt = mdates.DateFormatter('%b')
+        axins.xaxis.set_major_locator(months)
+        axins.xaxis.set_major_formatter(months_fmt)
+        axins.yaxis.set_tick_params(labelright=True, labelleft=True)
+        mark_inset(ax, axins, loc1=3, loc2=1, ec='black', alpha=0.7)
+    ###############################
+
     return ax
 
 def ch_detection_rt(model_dict):
@@ -585,9 +835,15 @@ def ch_detection_rt(model_dict):
     ax.text(1.08, 0.05, param_str, transform=ax.transAxes,
             verticalalignment='bottom', bbox={'ec': 'black', 'lw': 1})
     ax.set_xlabel('')
+    ax.yaxis.set_tick_params(labelright=True, labelleft=True)
 
-    plt.annotate(model_dict['footnote_str'],
-                 (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
+    if model_dict['footnote_str'][:21] == 'www.COVIDoutlook.info':
+        ax = add_logo(ax)
+        plt.annotate(model_dict['footnote_str'],
+                     (0, 0), (125, -80), xycoords='axes fraction', textcoords='offset points', va='top')
+    else:
+        plt.annotate(model_dict['footnote_str'],
+                     (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
 
     return ax
 
@@ -925,12 +1181,21 @@ def ch_statemap_casechange_anim(model_dict, df_counties, counties_geo, fitbounds
 
 def calc_trend(series, threshold):
     df = series.rolling(14).mean() - series.rolling(28).mean().fillna(0)
-    df = pd.cut(df.stack(), [-np.inf, -1*threshold, threshold, np.inf], labels=['▼','','▲'])
+    df = pd.cut(df.stack(), [-np.inf, -1*threshold, threshold, np.inf], labels=['▼','▶','▲'])
     return df.unstack().iloc[-1]
 
 def tab_summary(df_st_testing_fmt, df_fore_allstates, df_census, df_wavg_rt_conf_allregs):
     df_tab = df_census[df_census.SUMLEV == 40].copy()
     df_tab = df_tab.set_index('state')
+
+    # Days to Hosp Capacity
+    df_tab['hosp_cap'] = df_tab['pop2019'] / 1000 * 2.7 * 0.2
+    df_hosp_conur = df_fore_allstates[[col for col in df_fore_allstates.columns if col != 'US']] \
+                        .unstack('dt').loc['hospitalized'].T.unstack(0).loc[
+                    pd.Timestamp.today() - pd.Timedelta(days=30):]
+    df_hosp_cap_rat = df_hosp_conur.div(df_tab.hosp_cap)
+    hosp_cap_dates = df_hosp_cap_rat.mask(df_hosp_cap_rat < 1).apply(lambda x: x.first_valid_index())
+    df_tab['Days to Hospital Capacity'] = (hosp_cap_dates-pd.Timestamp.today()).dt.days
 
     # Deaths
     df_tab['Total Deaths'] = df_st_testing_fmt['deaths'].fillna(method='ffill').iloc[-1]
@@ -970,7 +1235,7 @@ def tab_summary(df_st_testing_fmt, df_fore_allstates, df_census, df_wavg_rt_conf
         df_st_testing_fmt['hospitalizedCumulative'].diff().fillna(method='ffill').div(df_tab.pop2019).mul(1e5),
         0.05)
 
-    df_tab.loc[:, [col for col in df_tab.columns if '_trend' in col]] = df_tab.loc[:, [col for col in df_tab.columns if '_trend' in col]].fillna('')
+    # df_tab.loc[:, [col for col in df_tab.columns if '_trend' in col]] = df_tab.loc[:, [col for col in df_tab.columns if '_trend' in col]].fillna('')
 
     # Modeled
     df_tab['Model Est\'d Active Infections'] = \
@@ -980,6 +1245,8 @@ def tab_summary(df_st_testing_fmt, df_fore_allstates, df_census, df_wavg_rt_conf
     df_tab['Model Est\'d Active Infections per 100k'] = df_tab['Model Est\'d Active Infections'].div(df_tab.pop2019).mul(1e5)
     df_tab = df_tab.sort_values(by='Model Est\'d Active Infections per 100k', ascending=False)
     df_tab['Current Reproduction Rate (Rt)'] = df_wavg_rt_conf_allregs.unstack('metric').swaplevel(axis=1)['rt'].fillna(method='ffill').iloc[-1]
+    # df_tab['rt'] = df_wavg_rt_conf_allregs.unstack('metric').swaplevel(axis=1)['rt'].fillna(method='ffill').iloc[-1]
+    # df_tab['Current Reproduction Rate (Rt)'] = '<span style="color: red">'
 
     df_tab = df_tab.reset_index()
     df_tab['Riskiest State Rank'] = df_tab.index + 1
@@ -1015,7 +1282,8 @@ def tab_summary(df_st_testing_fmt, df_fore_allstates, df_census, df_wavg_rt_conf
         'Total Deaths': '{0:,.0f}',
         '14-Day Avg Daily Deaths': '{0:,.1f}',
         'Hospitalized': '{0:,.0f}',
-        '14-Day Avg Daily Hosp Admits': '{0:,.2f}'
+        '14-Day Avg Daily Hosp Admits': '{0:,.2f}',
+        'Days to Hospital Capacity': '{0:,.0f}'
                    }
 
     for key, value in format_dict.items():
@@ -1043,8 +1311,21 @@ def tab_summary(df_st_testing_fmt, df_fore_allstates, df_census, df_wavg_rt_conf
                                                       + df_tab['hospadmits_trend'].astype(str)
     ######################
 
+    rt_temp = df_tab['Current Reproduction Rate (Rt)'].copy()
+    df_tab.loc[rt_temp > '1.1', 'Current Reproduction Rate (Rt)'] = rt_temp + '<span style="color: red"> 🟥</span>'
+    df_tab.loc[(rt_temp <= '1.1') & (rt_temp > '1.0'), 'Current Reproduction Rate (Rt)'] = rt_temp + '<span style="color: #ffcc00"> ▶</span>'
+    df_tab.loc[rt_temp <= '1.0', 'Current Reproduction Rate (Rt)'] = rt_temp + '<span style="color: green"> 🟢</span>'
+
+    df_tab['hosp_temp'] = pd.to_numeric(df_tab['Days to Hospital Capacity'], errors='coerce')
+    # df_tab.loc[df_tab['hosp_temp'] <= 14, 'Days to Hospital Capacity'] = '<img src="https://media.giphy.com/media/daDPy7kxfE1TfxLzNg/giphy.gif" width=15 height=15><span>' + df_tab['Days to Hospital Capacity'] + '</span>'
+    df_tab.loc[df_tab['hosp_temp'] <= 28, 'Days to Hospital Capacity'] = df_tab['Days to Hospital Capacity'] + '<span style="color: red"> 🟥</span>'
+    df_tab.loc[(df_tab['hosp_temp'] > 28) & (df_tab['hosp_temp'] < 120), 'Days to Hospital Capacity'] = df_tab['Days to Hospital Capacity'] + '<span style="color: #ffcc00"> ▶</span>'
+    df_tab.loc[df_tab['hosp_temp'] >= 120, 'Days to Hospital Capacity'] = '120+<span style="color: green"> 🟢</span>'
+    df_tab['Days to Hospital Capacity'] = df_tab['Days to Hospital Capacity'].replace('nan', '120+<span style="color: green"> 🟢</span>')
+
     output_cols = ['Riskiest State Rank', 'State', 'Population',
                    'Model Est\'d Active Infections per 100k', 'Current Reproduction Rate (Rt)',
+                   'Days to Hospital Capacity',
                    'Total Cases per 100k', '14-Day Avg Daily Cases per 100k',
                    'Positivity Rate',
                    'Total Deaths per 100k', '14-Day Avg Daily Deaths per 100k',
@@ -1057,8 +1338,9 @@ def tab_summary(df_st_testing_fmt, df_fore_allstates, df_census, df_wavg_rt_conf
     tab_header = "---\nlayout: noheader\n---\n"
     tab_html = tab_header + '<script src="/assets/js/sorttable.js" type="text/javascript"></script>' \
                + tab_html
-    tab_html = tab_html.replace('▼', '<span style="color: green">▼</span>').replace('▲',
-                                                                                    '<span style="color: red">▲</span>')
+    tab_html = tab_html.replace('▼', '<span style="color: green">▼</span>') \
+        .replace('▲', '<span style="color: red">▲</span>') \
+        .replace('▶', '<span style="color: #ffcc00">▶</span>')
 
     return tab_html, df_tab, df_tab_us
 

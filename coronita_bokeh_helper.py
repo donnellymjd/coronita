@@ -243,7 +243,8 @@ def bk_rt_confid(model_dict, simplify=True):
 
     return p
 
-def bk_population_share(df_agg, model_dict, param_str, chart_title=""):
+def bk_population_share(model_dict):
+    df_agg = model_dict['df_agg']
     col_names = ['susceptible', 'deaths', 'exposed', 'infectious', 'hospitalized', 'recovered']
     legend_names = ['Susceptible', 'Deaths', 'Exposed',
                     'Infectious', 'Hospitalizations', 'Recoveries']
@@ -273,6 +274,20 @@ def bk_population_share(df_agg, model_dict, param_str, chart_title=""):
 
     # Setting the second y axis range name and range
     p.extra_y_ranges = {"foo": Range1d(start=0, end=1)}
+
+    p.add_layout(Span(location=pd.Timestamp.today(),
+                     dimension='height',
+                     line_color='black',  # thislinecolor,
+                     line_dash='dashed',
+                     line_alpha=.7,
+                     line_width=2
+                     )
+                )
+    p.add_layout(Label(
+        x=pd.Timestamp.today(), y=0, y_units='data', text='Today',
+        text_color='black', text_alpha=0.4, text_font_size='2vw', text_align='center',
+        text_baseline='bottom'
+    ))
 
     # Adding the second axis to the plot.
     p.add_layout(LinearAxis(y_range_name="foo", #axis_label="% of Population",

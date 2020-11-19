@@ -187,7 +187,7 @@ p_det_rt = bk_detection_rt(df_agg, model_dict)
 # p_det_rt.x_range = p_cases.x_range
 p_det_rt = bk_overview_layout(p_det_rt)
 
-p_pop_share = bk_population_share(df_agg, model_dict, param_str, chart_title)
+p_pop_share = bk_population_share(model_dict)
 # p_pop_share.x_range = p_cases.x_range
 p_pop_share = bk_overview_layout(p_pop_share)
 
@@ -338,7 +338,7 @@ with io.open('../COVIDoutlook/reproduction.md', mode='w', encoding='utf-8') as f
 
 l_charts = ['ch_positivetests', 'ch_totaltests', 'ch_postestshare','ch_rt_confid', 'ch_detection_rt',
            'ch_statemap', 'ch_googmvmt',
-           'ch_exposed_infectious', 'ch_hosp',
+           'ch_exposed_infectious', 'ch_hosp_concur','ch_deaths_tot',
            'ch_population_share',
            'ch_cumul_infections', 'ch_daily_exposures', 'ch_hosp_admits', 'ch_daily_deaths'
            ]
@@ -350,7 +350,8 @@ d_chart_fns = {'ch_rt_confid': ch_rt_confid,
  'ch_detection_rt': ch_detection_rt,
  'ch_googmvmt': ch_googmvmt,
  'ch_exposed_infectious': ch_exposed_infectious,
- 'ch_hosp': ch_hosp,
+ 'ch_hosp_concur': ch_hosp_concur,
+ 'ch_deaths_tot': ch_deaths_tot,
  'ch_population_share': ch_population_share,
  'ch_cumul_infections': ch_cumul_infections,
  'ch_daily_exposures': ch_daily_exposures,
@@ -391,6 +392,7 @@ for state_code in list(df_census.state.unique()) + ['US']:
 
     statetab_output_cols = ['Riskiest State Rank', 'Population',
                    'Model Est\'d Active Infections', 'Current Reproduction Rate (Rt)',
+                   'Days to Hospital Capacity',
                    'Total Cases', '14-Day Avg Daily Cases',
                    'Positivity Rate',
                    'Total Deaths', '14-Day Avg Daily Deaths',
@@ -399,9 +401,13 @@ for state_code in list(df_census.state.unique()) + ['US']:
     if state_code == 'US':
         statetab = df_tab_us[statetab_output_cols[1:]].replace('nan', 'Not Available')
     else:
-        statetab = df_tab.loc[df_tab.state==state_code, statetab_output_cols].replace('nan', 'Not Available')
+        statetab = df_tab.loc[df_tab.state == state_code, statetab_output_cols].replace('nan', 'Not Available')
 
     statetab_html = statetab.to_html(index=False, border=0, justify='center', escape=False)
+
+    statetab_html = statetab_html.replace('▼', '<span style="color: green">▼</span>') \
+        .replace('▲', '<span style="color: red">▲</span>') \
+        .replace('▶', '<span style="color: #ffcc00">▶</span>')
     statetab_html = statetab_html.replace(
         'class="dataframe"', 'class="w3-table w3-striped w3-bordered w3-hoverable w3-medium"')
     statetab_html = statetab_html.replace(
