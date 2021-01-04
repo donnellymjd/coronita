@@ -145,6 +145,19 @@ def today_vline(ax):
              rotation=90, verticalalignment='top', horizontalalignment='right', size='large')
     return ax
 
+def hospcap_vline(ax, model_dict):
+    hosp_cap_dt = None
+
+    if 'hosp_cap_dt' in model_dict.keys():
+        hosp_cap_dt = model_dict['hosp_cap_dt']
+    elif 'policy_triggered' in model_dict['df_rts'].columns:
+        hosp_cap_dt = model_dict['df_rts']['policy_triggered'].loc[pd.Timestamp.today():].replace(0, np.nan).first_valid_index()
+
+    if hosp_cap_dt != None:
+        ax.axvline(x=hosp_cap_dt, ymin=0, ymax=ax.get_ylim()[1], color = 'black', linewidth=1, linestyle=":")
+        ax.text(hosp_cap_dt, 0, 'Hospital Capacity Reached: ' + hosp_cap_dt.strftime("%b %d"),
+                 rotation=90, verticalalignment='bottom', horizontalalignment='left', size='large')
+    return ax
 
 ### SINGLE REGION CHARTS ###
 def ch_exposed_infectious(model_dict):
@@ -188,6 +201,8 @@ def ch_exposed_infectious(model_dict):
     plt.annotate(model_dict['footnote_str'],
                  (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
     ax = today_vline(ax)
+
+    ax = hospcap_vline(ax, model_dict)
     return ax
 
 def ch_cumul_infections(model_dict):
@@ -214,6 +229,7 @@ def ch_cumul_infections(model_dict):
             verticalalignment='bottom', bbox={'ec': 'black', 'lw': 1})
     ax.set_xlabel('')
     ax = today_vline(ax)
+    ax = hospcap_vline(ax, model_dict)
     return ax
 
 def ch_daily_exposures(model_dict):
@@ -256,6 +272,7 @@ def ch_daily_exposures(model_dict):
             verticalalignment='bottom', bbox={'ec': 'black', 'lw': 1})
     ax.set_xlabel('')
     ax = today_vline(ax)
+    ax = hospcap_vline(ax, model_dict)
 
     return ax
 
@@ -294,6 +311,7 @@ def ch_hosp(model_dict):
     plt.annotate(model_dict['footnote_str'],
                  (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
     ax = today_vline(ax)
+    ax = hospcap_vline(ax, model_dict)
     return ax
 
 
@@ -346,8 +364,9 @@ def ch_hosp_concur(model_dict):
             verticalalignment='bottom', bbox={'ec': 'black', 'lw': 1})
     ax.set_xlabel('')
     ax = today_vline(ax)
+    ax = hospcap_vline(ax, model_dict)
 
-    if 'hosp_beds_avail' in model_dict['df_hist'].columns:
+    if ('hosp_beds_avail' in model_dict['df_hist'].columns) and ('hosp_concur' in model_dict['df_hist'].columns):
         hosp_beds_avail = model_dict['df_hist']['hosp_beds_avail']
         first_nonzero_idx = hosp_beds_avail.to_numpy().nonzero()[0][0]
         total_beds4covid = model_dict['df_hist']['hosp_concur'].add(
@@ -366,6 +385,7 @@ def ch_hosp_concur(model_dict):
                 verticalalignment='bottom',
                 color='#fc4f30',
                 alpha=1)
+        ax.set_ylim([0, max(ax.get_ylim()[1], total_beds4covid.max() * 1.05)])
     else:
         est_hosp_cap = model_dict['tot_pop'] / 1000 * 2.7 * 0.2
         ax.axhline(est_hosp_cap,
@@ -380,6 +400,7 @@ def ch_hosp_concur(model_dict):
                 verticalalignment='bottom',
                 color='#fc4f30',
                 alpha=1)
+        ax.set_ylim([0, max(ax.get_ylim()[1], est_hosp_cap * 1.05)])
     return ax
 
 def ch_hosp_admits(model_dict):
@@ -420,6 +441,7 @@ def ch_hosp_admits(model_dict):
             verticalalignment='bottom', bbox={'ec': 'black', 'lw': 1})
     ax.set_xlabel('')
     ax = today_vline(ax)
+    ax = hospcap_vline(ax, model_dict)
     return ax
 
 def ch_deaths_tot(model_dict):
@@ -460,6 +482,7 @@ def ch_deaths_tot(model_dict):
             verticalalignment='bottom', bbox={'ec': 'black', 'lw': 1})
     ax.set_xlabel('')
     ax = today_vline(ax)
+    ax = hospcap_vline(ax, model_dict)
     return ax
 
 def ch_daily_deaths(model_dict):
@@ -505,6 +528,7 @@ def ch_daily_deaths(model_dict):
             verticalalignment='bottom', bbox={'ec': 'black', 'lw': 1})
     ax.set_xlabel('')
     ax = today_vline(ax)
+    ax = hospcap_vline(ax, model_dict)
 
     return ax
 
@@ -1184,16 +1208,18 @@ def calc_trend(series, threshold):
     df = pd.cut(df.stack(), [-np.inf, -1*threshold, threshold, np.inf], labels=['▼','▶','▲'])
     return df.unstack().iloc[-1]
 
-def tab_summary(df_st_testing_fmt, df_fore_allstates, df_census, df_wavg_rt_conf_allregs):
+def tab_summary(df_st_testing_fmt, df_fore_allstates, df_census, df_wavg_rt_conf_allregs, df_hhs_hosp):
     df_tab = df_census[df_census.SUMLEV == 40].copy()
     df_tab = df_tab.set_index('state')
 
     # Days to Hosp Capacity
-    df_tab['hosp_cap'] = df_tab['pop2019'] / 1000 * 2.7 * 0.2
-    df_hosp_conur = df_fore_allstates[[col for col in df_fore_allstates.columns if col != 'US']] \
+    # df_tab['hosp_cap'] = df_tab['pop2019'] / 1000 * 2.7 * 0.2
+    df_tab['hosp_cap'] = df_hhs_hosp['hosp_beds_avail'].unstack('state').fillna(method='ffill').iloc[-1] + \
+                         df_st_testing_fmt['hospitalizedCurrently'].fillna(method='ffill').iloc[-1]
+    df_hosp_concur = df_fore_allstates[[col for col in df_fore_allstates.columns if col != 'US']] \
                         .unstack('dt').loc['hospitalized'].T.unstack(0).loc[
                     pd.Timestamp.today() - pd.Timedelta(days=30):]
-    df_hosp_cap_rat = df_hosp_conur.div(df_tab.hosp_cap)
+    df_hosp_cap_rat = df_hosp_concur.div(df_tab.hosp_cap)
     hosp_cap_dates = df_hosp_cap_rat.mask(df_hosp_cap_rat < 1).apply(lambda x: x.first_valid_index())
     df_tab['Days to Hospital Capacity'] = (hosp_cap_dates-pd.Timestamp.today()).dt.days
 
@@ -1312,16 +1338,28 @@ def tab_summary(df_st_testing_fmt, df_fore_allstates, df_census, df_wavg_rt_conf
     ######################
 
     rt_temp = df_tab['Current Reproduction Rate (Rt)'].copy()
-    df_tab.loc[rt_temp > '1.1', 'Current Reproduction Rate (Rt)'] = rt_temp + '<span style="color: red"> 🟥</span>'
-    df_tab.loc[(rt_temp <= '1.1') & (rt_temp > '1.0'), 'Current Reproduction Rate (Rt)'] = rt_temp + '<span style="color: #ffcc00"> ▶</span>'
-    df_tab.loc[rt_temp <= '1.0', 'Current Reproduction Rate (Rt)'] = rt_temp + '<span style="color: green"> 🟢</span>'
+    df_tab.loc[rt_temp > '1.1', 'Current Reproduction Rate (Rt)'] = \
+        '<span style="color:transparent; font-size:0;">' + rt_temp.str.zfill(6) + '</span>' \
+        + rt_temp + '<span style="color: red"> 🟥</span>'
+    df_tab.loc[(rt_temp <= '1.1') & (rt_temp > '1.0'), 'Current Reproduction Rate (Rt)'] = \
+        '<span style="color:transparent; font-size:0;">' + rt_temp.str.zfill(6) + '</span>' \
+        + rt_temp + '<span style="color: #ffcc00"> ▶</span>'
+    df_tab.loc[rt_temp <= '1.0', 'Current Reproduction Rate (Rt)'] = \
+        '<span style="color:transparent; font-size:0;">' + rt_temp.str.zfill(6) + '</span>' \
+        + rt_temp + '<span style="color: green"> 🟢</span>'
 
     df_tab['hosp_temp'] = pd.to_numeric(df_tab['Days to Hospital Capacity'], errors='coerce')
     # df_tab.loc[df_tab['hosp_temp'] <= 14, 'Days to Hospital Capacity'] = '<img src="https://media.giphy.com/media/daDPy7kxfE1TfxLzNg/giphy.gif" width=15 height=15><span>' + df_tab['Days to Hospital Capacity'] + '</span>'
-    df_tab.loc[df_tab['hosp_temp'] <= 28, 'Days to Hospital Capacity'] = df_tab['Days to Hospital Capacity'] + '<span style="color: red"> 🟥</span>'
-    df_tab.loc[(df_tab['hosp_temp'] > 28) & (df_tab['hosp_temp'] < 120), 'Days to Hospital Capacity'] = df_tab['Days to Hospital Capacity'] + '<span style="color: #ffcc00"> ▶</span>'
-    df_tab.loc[df_tab['hosp_temp'] >= 120, 'Days to Hospital Capacity'] = '120+<span style="color: green"> 🟢</span>'
-    df_tab['Days to Hospital Capacity'] = df_tab['Days to Hospital Capacity'].replace('nan', '120+<span style="color: green"> 🟢</span>')
+    df_tab.loc[df_tab['hosp_temp'] <= 28, 'Days to Hospital Capacity'] = \
+        '<span style="color:transparent; font-size:0;">' + df_tab['Days to Hospital Capacity'].str.zfill(3) + '</span>' \
+        + df_tab['Days to Hospital Capacity'] + '<span style="color: red"> 🟥</span>'
+    df_tab.loc[(df_tab['hosp_temp'] > 28) & (df_tab['hosp_temp'] < 120), 'Days to Hospital Capacity'] = \
+        '<span style="color:transparent; font-size:0;">' + df_tab['Days to Hospital Capacity'].str.zfill(3) + '</span>' \
+        + df_tab['Days to Hospital Capacity'] + '<span style="color: #ffcc00"> ▶</span>'
+    df_tab.loc[df_tab['hosp_temp'] >= 120, 'Days to Hospital Capacity'] = \
+        '<span style="color:transparent; font-size:0;">121</span>120+<span style="color: green"> 🟢</span>'
+    df_tab['Days to Hospital Capacity'] = df_tab['Days to Hospital Capacity'].replace(
+        'nan', '<span style="color:transparent; font-size:0;">121</span>120+<span style="color: green"> 🟢</span>')
 
     output_cols = ['Riskiest State Rank', 'State', 'Population',
                    'Model Est\'d Active Infections per 100k', 'Current Reproduction Rate (Rt)',
@@ -1332,7 +1370,8 @@ def tab_summary(df_st_testing_fmt, df_fore_allstates, df_census, df_wavg_rt_conf
                    'Hospitalized per 100k', '14-Day Avg Daily Hosp Admits per 100k'
                    ]
 
-    tab_html = df_tab[output_cols].replace('nan','Not Available').to_html(index=False, border=0, justify='center', escape=False)
+    tab_html = df_tab[output_cols].replace('nan','Not Available').replace('nannan','Not Available')
+    tab_html = tab_html.to_html(index=False, border=0, justify='center', escape=False)
     tab_html = tab_html.replace('<table', '<table class="w3-table w3-striped w3-hoverable w3-medium sortable"')
 
     tab_header = "---\nlayout: noheader\n---\n"

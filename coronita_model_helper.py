@@ -31,17 +31,32 @@ def outlier_removal(raw_series, num_std=3):
 
     return cleaned_series
 
-def lvl_adj_forecast(model_dict, hist_lvl_name, fore_lvl_name):
-    df_agg = model_dict['df_agg'].copy()
-    hist_last_day = model_dict['df_hist'][hist_lvl_name].last_valid_index()
-    fore_diff_future = df_agg[fore_lvl_name].diff().loc[hist_last_day + pd.Timedelta(days=1):]
-    fore_lvl_adjusted = fore_diff_future.cumsum().add(model_dict['df_hist'][hist_lvl_name].loc[hist_last_day])
+def lvl_adj_forecast(s_hist_lvl, s_fore_lvl): #lvl_adj_forecast(model_dict, hist_lvl_name, fore_lvl_name):
+    # df_agg = model_dict['df_agg'].copy()
+    # hist_last_day = model_dict['df_hist'][hist_lvl_name].last_valid_index()
+    # fore_diff_future = df_agg[fore_lvl_name].diff().loc[hist_last_day + pd.Timedelta(days=1):]
+    # fore_lvl_adjusted = fore_diff_future.cumsum().add(model_dict['df_hist'][hist_lvl_name].loc[hist_last_day])
+    #
+    # df_agg[fore_lvl_name+'_fitted'] = df_agg[fore_lvl_name]
+    # df_agg[fore_lvl_name] = fore_lvl_adjusted
+    # df_agg[fore_lvl_name] = df_agg[fore_lvl_name].fillna(df_agg[fore_lvl_name+'_fitted'])
+    # model_dict['df_agg'] = df_agg
+    # return model_dict
 
-    df_agg[fore_lvl_name+'_fitted'] = df_agg[fore_lvl_name]
-    df_agg[fore_lvl_name] = fore_lvl_adjusted
-    df_agg[fore_lvl_name] = df_agg[fore_lvl_name].fillna(df_agg[fore_lvl_name+'_fitted'])
-    model_dict['df_agg'] = df_agg
-    return model_dict
+    hist_last_day = s_hist_lvl.last_valid_index()
+    fore_diff_future = s_fore_lvl.diff().loc[hist_last_day + pd.Timedelta(days=1):]
+    fore_lvl_adjusted = fore_diff_future.cumsum().add(s_hist_lvl.loc[hist_last_day])
+    fore_lvl_adjusted = fore_lvl_adjusted.reindex(s_fore_lvl.index)
+    fore_lvl_adjusted = fore_lvl_adjusted.fillna(s_fore_lvl)
+
+    return fore_lvl_adjusted
+
+def normal_hosp_cap(model_dict):
+    covid_hosp_capacity = model_dict['df_hist']['hosp_beds_avail'].replace(0, np.nan).dropna()
+    covid_hosp_capacity = covid_hosp_capacity + model_dict['df_hist']['hosp_concur'].dropna()
+    covid_hosp_capacity = covid_hosp_capacity.rolling(7).mean()
+    normal_capacity = covid_hosp_capacity.quantile(.05)
+    return normal_capacity
 
 def daily_cohort_model(cohort_strt, d_to_fore, covid_params, E_0, I_0=0):
     t = np.linspace(0, int(d_to_fore) - 1, int(d_to_fore))
@@ -165,11 +180,13 @@ def seir_model_cohort(start_dt, model_dict, exposed_0=100, infectious_0=100):
         r_t = r_t.fillna(model_dict['df_rts']['rt_scenario']).fillna(method='bfill').fillna(method='ffill')
     else:
         local_r0_date = model_dict['df_rts'].loc['2020-02-01':'2020-04-30', 'weighted_average'].idxmax()
+        # print('local_r0_date: ', local_r0_date)
         r_t = r_t.fillna(model_dict['df_rts'].loc[local_r0_date:, 'weighted_average'])
         r_t = r_t.fillna(method='bfill').fillna(method='ffill')
 
     model_dict['df_rts'] = model_dict['df_rts'].reindex(r_t.index)
     model_dict['df_rts']['policy_triggered'] = 0
+    model_dict['hosp_cap_dt'] = None
 
     last_r = r_t.iloc[0]
 
@@ -180,7 +197,8 @@ def seir_model_cohort(start_dt, model_dict, exposed_0=100, infectious_0=100):
                 and (cohort_strt > model_dict['df_rts']['weighted_average'].last_valid_index()) ):
 
             if 'hosp_beds_avail' in model_dict['df_hist'].columns:
-                covid_hosp_capacity = model_dict['df_hist']['hosp_beds_avail'].rolling(7).mean().dropna().iloc[-1]
+                covid_hosp_capacity = model_dict['df_hist']['hosp_beds_avail'].replace(0,np.nan).rolling(7).mean().dropna().iloc[-1]
+                covid_hosp_capacity = covid_hosp_capacity + model_dict['df_hist']['hosp_concur'].dropna().iloc[-1]
             else:
                 tot_hosp_capacity = model_dict['tot_pop']/1000 * 2.7
                 covid_hosp_capacity = tot_hosp_capacity * 0.2
@@ -190,6 +208,8 @@ def seir_model_cohort(start_dt, model_dict, exposed_0=100, infectious_0=100):
                         and model_dict['df_rts']['policy_triggered'].sum() > 1) ):
                 r_t.loc[cohort_strt] = 0.9
                 model_dict['df_rts'].loc[cohort_strt, 'policy_triggered'] = 1
+                if model_dict['hosp_cap_dt'] == None:
+                    model_dict['hosp_cap_dt'] = cohort_strt
 
         this_r = r_t.loc[cohort_strt]
         beta = this_r * _gamma
@@ -235,7 +255,8 @@ def seir_model_cohort(start_dt, model_dict, exposed_0=100, infectious_0=100):
         df_agg = df_all_cohorts.sum(axis=1).unstack()
         df_agg.index = pd.DatetimeIndex(df_agg.index).normalize()
         next_infectious = df_agg.loc[cohort_strt, 'infectious']
-        next_hospitalized = df_agg.loc[cohort_strt, 'hospitalized']
+        # next_hospitalized = df_agg.loc[cohort_strt, 'hospitalized']
+        next_hospitalized = lvl_adj_forecast(model_dict['df_hist']['hosp_concur'], df_agg['hospitalized']).loc[cohort_strt]
         next_suspop = suspop[-1] + dS
         suspop.append(next_suspop)
 
@@ -267,13 +288,34 @@ def seir_model_cohort(start_dt, model_dict, exposed_0=100, infectious_0=100):
     df_agg['exposed_daily'] = exposed_daily[(exposed_daily.dt == exposed_daily.cohort_dt)].set_index(['dt'])['exposed']
     df_agg['deaths_daily'] = df_agg['deaths'].diff()
 
+    df_agg['hospitalized_fitted'] = df_agg['hospitalized']
+    df_agg['hospitalized'] = lvl_adj_forecast(model_dict['df_hist']['hosp_concur'], df_agg['hospitalized'])
+    df_agg['deaths_fitted'] = df_agg['deaths']
+    df_agg['deaths'] = lvl_adj_forecast(model_dict['df_hist']['deaths_tot'], df_agg['deaths'])
+
     model_dict['df_agg'] = df_agg.dropna()
     model_dict['df_all_cohorts'] = df_all_cohorts
 
-    model_dict = lvl_adj_forecast(model_dict, 'hosp_concur', 'hospitalized')
-    model_dict = lvl_adj_forecast(model_dict, 'deaths_tot', 'deaths')
+    # model_dict = lvl_adj_forecast(model_dict, 'hosp_concur', 'hospitalized')
+    # model_dict = lvl_adj_forecast(model_dict, 'deaths_tot', 'deaths')
 
     return model_dict
+
+def fore_rmse(obs_metric, pred_metric):
+    from sklearn.metrics import mean_squared_error
+    df_compare = pd.DataFrame()
+
+    df_compare['obs_metric'] = obs_metric
+    df_compare['pred_metric'] = pred_metric
+
+    df_compare = df_compare.dropna()
+    df_compare = df_compare.iloc[-60:]
+    rmse = np.sqrt(mean_squared_error(df_compare['obs_metric'], df_compare['pred_metric']))
+    # norm_rmse = rmse / (df_compare['obs_metric'].max() - df_compare['obs_metric'].min()) * 1e3
+    norm_rmse = rmse / df_compare['obs_metric'].mean() * 1e3
+    avg_error = df_compare['obs_metric'].sub(df_compare['pred_metric']).mean()
+    rel_error = df_compare['obs_metric'].div(df_compare['pred_metric']).mean()
+    return pd.Series([norm_rmse, avg_error, rel_error], index=['rmse', 'avg_error', 'rel_error'])
 
 def model_find_start(this_guess, model_dict, exposed_0=None, infectious_0=None):
     from sklearn.metrics import mean_squared_error
@@ -299,41 +341,69 @@ def model_find_start(this_guess, model_dict, exposed_0=None, infectious_0=None):
     # print(infectious_0, exposed_0)
 
     # Change in error used to be < 0, but this makes a req for a big enough change.
-    while ( (change_in_error <= -1)
-            and ( this_guess >= ( first_hist_obs + pd.Timedelta(days=-45) ) )
-            and ( this_guess <= ( first_hist_obs + pd.Timedelta(days=45) ) )
+    while ( ( (change_in_error <= 0) or override_cie )
+            # and ( this_guess >= ( first_hist_obs - pd.Timedelta(days=60) ) )
+            # and ( this_guess <= ( first_hist_obs + pd.Timedelta(days=60) ) )
     ):
+        model_dict = orig_model_dict.copy()
         print('This guess: ', this_guess)
         model_dict['d_to_forecast'] = (pd.Timestamp.today() - this_guess).days
         model_dict = seir_model_cohort(this_guess, model_dict, exposed_0, infectious_0)
         df_agg = model_dict['df_agg']
 
-        df_compare = pd.DataFrame()
+        # df_compare = pd.DataFrame()
+        #
+        # if 'deaths_tot' in model_dict['df_hist'].columns:
+        #     df_compare['obs_metric'] = model_dict['df_hist']['deaths_tot']
+        #     df_compare['pred_metric'] = df_agg['deaths']
+        # elif 'hosp_concur' in model_dict['df_hist'].columns:
+        #     df_compare['obs_metric'] = model_dict['df_hist']['hosp_concur']
+        #     df_compare['pred_metric'] = df_agg['hospitalized']
+        #
+        # df_compare = df_compare.dropna()
+        # df_compare = df_compare.iloc[-60:]
+        # rmses.loc[this_guess] = np.sqrt(mean_squared_error(df_compare['obs_metric'], df_compare['pred_metric']))
 
+        df_thiserror = pd.DataFrame()
         if 'deaths_tot' in model_dict['df_hist'].columns:
-            df_compare['obs_metric'] = model_dict['df_hist']['deaths_tot']
-            df_compare['pred_metric'] = df_agg['deaths']
-        elif 'hosp_concur' in model_dict['df_hist'].columns:
-            df_compare['obs_metric'] = model_dict['df_hist']['hosp_concur']
-            df_compare['pred_metric'] = df_agg['hospitalized']
+            df_thiserror['deaths_tot'] = fore_rmse(model_dict['df_hist']['deaths_tot'], df_agg['deaths'])
+        if 'deaths_daily' in model_dict['df_hist'].columns:
+            df_thiserror['deaths_daily'] = fore_rmse(model_dict['df_hist']['deaths_daily'].rolling(7).mean(), df_agg['deaths_daily'])
+        if 'hosp_concur' in model_dict['df_hist'].columns:
+            df_thiserror['hosp_concur'] = fore_rmse(model_dict['df_hist']['hosp_concur'], df_agg['hospitalized'])
+            df_thiserror.loc['rmse','hosp_concur'] = df_thiserror.loc['rmse','hosp_concur'] * 2
+            df_thiserror.loc['avg_error','hosp_concur'] = df_thiserror.loc['avg_error','hosp_concur'] * 2
+        rmses.loc[this_guess] = df_thiserror.loc['rmse'].mean()
 
-        df_compare = df_compare.dropna()
-        df_compare = df_compare.iloc[-60:]
-        rmses.loc[this_guess] = np.sqrt(mean_squared_error(df_compare['obs_metric'], df_compare['pred_metric']))
-
-        print('This error: ', rmses.loc[this_guess])
+        print('This rmse: ', rmses.loc[this_guess])
 
         if last_guess != this_guess:
             change_in_error = rmses.loc[this_guess] - rmses.loc[last_guess]
-        print('Change in error: ', change_in_error)
+        print('Change in rmse: ', change_in_error)
 
         last_guess = this_guess
-        avg_error = df_compare['obs_metric'].sub(df_compare['pred_metric']).mean()
+        # avg_error = df_compare['obs_metric'].sub(df_compare['pred_metric']).mean()
+        avg_error = df_thiserror.loc['avg_error'].mean()
+        rel_error = df_thiserror.loc['rel_error'].mean()
         print('Average Error: ', avg_error)
-        if avg_error < 0:
-            this_guess = this_guess + pd.Timedelta(days=1)
+        if df_agg['susceptible'].iloc[-1]/model_dict['tot_pop'] < 0.1:
+            print('Way too early starting date.')
+            this_guess = this_guess + pd.Timedelta(days=14)
+            override_cie = True
+        elif avg_error < 0:
+            if rel_error < 0.5:
+                this_guess = this_guess + pd.Timedelta(days=7)
+                override_cie = True
+            else:
+                this_guess = this_guess + pd.Timedelta(days=1)
+                override_cie = False
         else:
-            this_guess = this_guess - pd.Timedelta(days=1)
+            if rel_error > 2:
+                this_guess = this_guess - pd.Timedelta(days=7)
+                override_cie = True
+            else:
+                this_guess = this_guess - pd.Timedelta(days=1)
+                override_cie = False
 
         # from coronita_chart_helper import ch_deaths_tot, ch_exposed_infectious
         # import matplotlib.pyplot as plt
@@ -345,12 +415,14 @@ def model_find_start(this_guess, model_dict, exposed_0=None, infectious_0=None):
     model_dict['d_to_forecast'] = (pd.Timestamp.today() - this_guess).days + model_dict['d_to_forecast']
     model_dict = seir_model_cohort(rmses.idxmin(), model_dict, exposed_0, infectious_0)
     print('Best starting date: ', rmses.idxmin())
+    model_dict['rmses'] = rmses
     return model_dict
 
 def est_all_rts(model_dict):
     df_hist = model_dict['df_hist'].copy()
     df_hist = df_hist.dropna(how='all', axis=1)
     df_hist = df_hist[[col for col in df_hist.columns if df_hist[col].std() > 0]]
+    df_hist = df_hist.apply(lambda x: x.iloc[:x.to_numpy().nonzero()[0][-1] + 1])
 
     keepcols = []
     lookback = 7
@@ -366,8 +438,10 @@ def est_all_rts(model_dict):
         df_weights['cases_daily'] = 0.5
         cases_shift = int(model_dict['covid_params']['d_incub'] + 2) * -1
 
-        cases_daily = df_hist['cases_daily']
-        cases_daily = outlier_removal(cases_daily, num_std=4).add(1.0)
+        cases_daily = df_hist['cases_daily'].add(1.0)
+        if outlier_removal(cases_daily, num_std=4).dropna().shape[0] / cases_daily.dropna().shape[0] > 0.8:
+            cases_daily = outlier_removal(cases_daily, num_std=4)
+        # cases_daily = outlier_removal(cases_daily, num_std=4).add(1.0)
         cases_daily = cases_daily.rolling(lookback, center=False, min_periods=1).mean()
         df_hist_shifted['cases_daily'] = cases_daily.shift(cases_shift)
 
@@ -379,10 +453,17 @@ def est_all_rts(model_dict):
         df_weights['test_share'] = 1.0
         test_share_shift = int(model_dict['covid_params']['d_incub'] + 2) * -1
 
-        cases_daily_7da = outlier_removal(df_hist['cases_daily']).add(1.0)
+        cases_daily_7da = df_hist['cases_daily'].add(1.0)
+        if outlier_removal(cases_daily_7da, num_std=4).dropna().shape[0] / cases_daily_7da.dropna().shape[0] > 0.8:
+            cases_daily_7da = outlier_removal(cases_daily_7da, num_std=4)
+        # cases_daily_7da = outlier_removal(cases_daily_7da).add(1.0)
         cases_daily_7da = cases_daily_7da.rolling(lookback, center=False, min_periods=1).mean()
-        pos_neg_tests_7da = outlier_removal(model_dict['df_hist']['pos_neg_tests_daily']).add(1.0)
+
+        pos_neg_tests_7da = model_dict['df_hist']['pos_neg_tests_daily'].add(1.0)
         pos_neg_tests_7da = pos_neg_tests_7da.rolling(lookback, center=False, min_periods=1).mean()
+        if outlier_removal(pos_neg_tests_7da, num_std=4).dropna().shape[0] / pos_neg_tests_7da.dropna().shape[0] > 0.8:
+            pos_neg_tests_7da = outlier_removal(pos_neg_tests_7da)
+        # pos_neg_tests_7da = pos_neg_tests_7da.rolling(lookback, center=False, min_periods=1).mean()
 
         test_share = cases_daily_7da.div(pos_neg_tests_7da)
 
@@ -397,28 +478,37 @@ def est_all_rts(model_dict):
 
     if 'deaths_daily' in df_hist.columns:
         keepcols.append('deaths_daily')
-        df_weights['deaths_daily'] = 3.0
+        df_weights['deaths_daily'] = 2.0
         deaths_shift = int(model_dict['covid_params']['d_incub'] + model_dict['covid_params']['d_til_death']) * -1
 
-        deaths_daily = df_hist['deaths_daily']
-        deaths_daily = outlier_removal(deaths_daily, num_std=4).add(1.0)
+        deaths_daily = df_hist['deaths_daily'].add(1.0)
         deaths_daily = deaths_daily.rolling(lookback, center=False, min_periods=1).mean()
+        if outlier_removal(deaths_daily, num_std=4).dropna().shape[0] / deaths_daily.dropna().shape[0] > 0.8:
+            deaths_daily = outlier_removal(deaths_daily, num_std=4)
+        else:
+            print('didnt remove death outliers.')
+        # deaths_daily = outlier_removal(deaths_daily, num_std=4).add(1.0)
+        # deaths_daily = deaths_daily.rolling(lookback, center=False, min_periods=1).mean()
         df_hist_shifted['deaths_daily'] = deaths_daily.shift(deaths_shift)
+        print('deaths shifted by: ', deaths_shift)
 
         df_rt = est_rt_wconf(df_hist_shifted['deaths_daily'], lookback, d_infect)
         df_rts_conf = pd.concat([df_rts_conf, df_rt.stack('metric')], axis=1)
 
     if 'hosp_concur' in df_hist.columns:
         keepcols.append('hosp_concur')
-        df_weights['hosp_concur'] = 1.5
+        df_weights['hosp_concur'] = 2.0 #1.5
         hosp_concur_shift = (int(model_dict['covid_params']['d_incub']
                                  + model_dict['covid_params']['d_to_hosp']
                                  + model_dict['covid_params']['d_in_hosp'] / 2)
                              * -1)
 
-        hosp_concur = df_hist['hosp_concur']
-        hosp_concur = outlier_removal(hosp_concur, num_std=4).add(1.0)
+        hosp_concur = df_hist['hosp_concur'].add(1.0)
         hosp_concur = hosp_concur.rolling(lookback, center=False, min_periods=1).mean()
+        if outlier_removal(hosp_concur, num_std=4).dropna().shape[0] / hosp_concur.dropna().shape[0] > 0.8:
+            hosp_concur = outlier_removal(hosp_concur, num_std=4)
+        # hosp_concur = outlier_removal(hosp_concur, num_std=4).add(1.0)
+        # hosp_concur = hosp_concur.rolling(lookback, center=False, min_periods=1).mean()
         df_hist_shifted['hosp_concur'] = hosp_concur.shift(hosp_concur_shift)
 
         df_rt = est_rt_wconf(df_hist_shifted['hosp_concur'], lookback, d_infect)
@@ -426,7 +516,7 @@ def est_all_rts(model_dict):
 
     if 'hosp_admits' in df_hist.columns:
         keepcols.append('hosp_admits')
-        df_weights['hosp_admits'] = 3.0
+        df_weights['hosp_admits'] = 1.5 #3.0
         hosp_admits_shift = (int(model_dict['covid_params']['d_incub']
                                  + model_dict['covid_params']['d_to_hosp'])
                              * -1)
@@ -435,27 +525,40 @@ def est_all_rts(model_dict):
             df_hist.loc[df_hist['hosp_admits'] < df_hist['hosp_concur'].diff(), 'hosp_admits'] = np.nan
 
         hosp_admits = df_hist['hosp_admits']
-        hosp_admits = outlier_removal(hosp_admits, num_std=4).add(1.0)
+        first_hosp_admit = hosp_admits.replace(0, np.nan).dropna().first_valid_index()
+        if hosp_admits.loc[first_hosp_admit] > hosp_admits.loc[first_hosp_admit:].quantile(.95):
+            first_hosp_admit = first_hosp_admit + pd.Timedelta(days=1)
+        hosp_admits = hosp_admits.loc[first_hosp_admit:].reindex(df_hist.index).add(1.0)
         hosp_admits = hosp_admits.rolling(lookback, center=False, min_periods=1).mean()
+        if outlier_removal(hosp_admits, num_std=4).dropna().shape[0] / hosp_admits.dropna().shape[0] > 0.8:
+            hosp_admits = outlier_removal(hosp_admits, num_std=4)
+        # hosp_admits = outlier_removal(hosp_admits, num_std=4).add(1.0)
+        # hosp_admits = hosp_admits.rolling(lookback, center=False, min_periods=1).mean()
         df_hist_shifted['hosp_admits'] = hosp_admits.shift(hosp_admits_shift)
 
         df_rt = est_rt_wconf(df_hist_shifted['hosp_admits'], lookback, d_infect)
         df_rts_conf = pd.concat([df_rts_conf, df_rt.stack('metric')], axis=1)
 
     df_hist_shifted_ravg = df_hist_shifted.rolling(lookback, win_type='gaussian', center=True, min_periods=3).mean(
-        std=3)
+        std=1) # Normal
+    # df_hist_shifted_ravg = df_hist_shifted.rolling(lookback, center=True, min_periods=3).mean() # Exp. Version for NYS
 
     df_lambdas = df_hist_shifted_ravg.copy()
     df_lambdas = df_lambdas.pct_change(fill_method=None)
     # df_lambdas = df_lambdas.apply(np.log).diff()
+    if 'hosp_concur' in df_lambdas.columns:
+        df_lambdas['hosp_concur'] = df_lambdas['hosp_concur'].pow(1.4)
     df_lambdas = df_lambdas.replace([np.inf, -np.inf], np.nan)
     df_lambdas = df_lambdas.apply(outlier_removal, num_std=3)
 
-    df_lambdas = df_lambdas.rolling(lookback, win_type='gaussian', center=True).mean(std=4)
+    # df_lambdas = df_lambdas.rolling(lookback, win_type='gaussian', center=True).mean(std=4) # Normal
+    # df_lambdas = df_lambdas.rolling(lookback, win_type='gaussian', center=True).mean(std=1) # Exp. Version for NYS
 
+    wavg_lookback = lookback # Normal
+    # wavg_lookback = 1 # Exp. Version for NYS
     for center in df_lambdas.dropna(how='all').index:
-        bow = center - pd.Timedelta(days=(lookback - 1) // 2)
-        eow = center + pd.Timedelta(days=(lookback - 1) // 2)
+        bow = center - pd.Timedelta(days=(wavg_lookback - 1) // 2)
+        eow = center + pd.Timedelta(days=(wavg_lookback - 1) // 2)
         windowed = np.array(df_lambdas.loc[bow:eow, keepcols].to_numpy()).flatten()
         windowed = windowed[~np.isnan(windowed)]
         weights = df_weights[~df_lambdas[keepcols].isnull()].loc[bow:eow, keepcols].to_numpy().flatten()
@@ -494,7 +597,9 @@ def est_all_rts(model_dict):
     #####################################
 
     s_lambda = df_lambdas['weighted_average']
-    s_lambda = s_lambda.rolling(lookback, win_type='gaussian', center=False).mean(std=3)
+    # s_lambda = s_lambda.rolling(lookback, win_type='gaussian', center=False).mean(std=2)
+    s_lambda = s_lambda.rolling(lookback, win_type='gaussian', center=True).mean(std=2) # Normal Version
+    # s_lambda = s_lambda.rolling(lookback, win_type='gaussian', center=True).mean(std=1) # Exp. Version for NYS
 
     s_lambda = s_lambda.loc[:s_lambda.last_valid_index()]
     s_lambda = s_lambda.clip(lower=-1.0)
@@ -513,6 +618,11 @@ def est_all_rts(model_dict):
 
     df_rts_conf = pd.concat([df_rts_conf, df_rt.stack('metric')], axis=1)
 
+    model_dict['df_rts_conf'] = df_rts_conf.copy()
+    model_dict['df_hist_shifted'] = df_hist_shifted.copy()
+    model_dict['df_lambdas'] = df_lambdas.copy()
+
+
     # cases_daily.dropna().plot(figsize=[14, 4]);
     # plt.show()
     # df_rts_conf.unstack('metric').swaplevel(axis=1)['rt'].plot(figsize=[14, 4], title='rts');
@@ -527,9 +637,12 @@ def est_all_rts(model_dict):
     # plt.show()
     # stddev.plot(title='stddev', figsize=[14, 4]);
     # plt.show()
-    return df_rts_conf
+    return model_dict
 
 def est_rt_wconf(lvl_series, lookback, d_infect):
+    last_nonzero_idx = lvl_series.to_numpy().nonzero()[0][-1]
+    lvl_series = lvl_series.iloc[:last_nonzero_idx+1]
+
     _gamma = 1 / d_infect
 
     pct_series = lvl_series.rolling(lookback, center=True).mean().pct_change(fill_method=None)
@@ -564,7 +677,7 @@ def est_rt_wconf(lvl_series, lookback, d_infect):
 
     return df_rt
 
-def make_model_dict_state(state_code, abbrev_us_state, df_census, df_st_testing_fmt, covid_params, d_to_forecast = 75,
+def make_model_dict_state(state_code, abbrev_us_state, df_census, df_st_testing_fmt, df_hhs_hosp, covid_params, d_to_forecast = 75,
                         df_mvmt=pd.DataFrame(), df_interventions=pd.DataFrame()):
     model_dict = {}
 
@@ -599,19 +712,38 @@ def make_model_dict_state(state_code, abbrev_us_state, df_census, df_st_testing_
     pos_neg_tests_daily = model_dict['df_hist']['pos_neg_tests_tot'].diff()
     model_dict['df_hist']['pos_neg_tests_daily'] = pos_neg_tests_daily.mask(pos_neg_tests_daily < 0)
 
+    try:
+        model_dict['df_hist']['hosp_beds_tot'] = df_hhs_hosp['Total Inpatient Beds'].loc[model_dict['region_code']]
+        model_dict['df_hist']['hosp_beds_avail'] = df_hhs_hosp['hosp_beds_avail'].loc[model_dict['region_code']]
+    except:
+        print('hosp capacity data not available for {}'.format(model_dict['region_code']))
+
     model_dict['covid_params'] = covid_params.copy()
 
     if model_dict['df_hist']['deaths_daily'].mean() > 0.5:
-        deaths_hosp_rat = np.linalg.lstsq(model_dict['df_hist'][['deaths_daily','hosp_concur']].dropna()['deaths_daily'].values.reshape(-1, 1),
-                                          model_dict['df_hist'][['deaths_daily','hosp_concur']].dropna()['hosp_concur'],
-                                          rcond=None)[0][0] / 9.0
+        # deaths_hosp_rat = np.linalg.lstsq(model_dict['df_hist'][['deaths_daily','hosp_concur']].dropna()['deaths_daily'].values.reshape(-1, 1),
+        #                                   model_dict['df_hist'][['deaths_daily','hosp_concur']].dropna()['hosp_concur'],
+        #                                   rcond=None)[0][0] / 9.0
+        deaths_shift = int(model_dict['covid_params']['d_incub'] + model_dict['covid_params']['d_til_death']) * -1
+        hosp_concur_shift = (int(model_dict['covid_params']['d_incub']
+                                 + model_dict['covid_params']['d_to_hosp']
+                                 + model_dict['covid_params']['d_in_hosp'] / 2)
+                             * -1)
 
+        df_dhratio = model_dict['df_hist'][['deaths_daily', 'hosp_concur']].copy()
+
+        df_dhratio['deaths_daily'] = df_dhratio['deaths_daily'].rolling(7).sum().shift(deaths_shift)
+        df_dhratio['hosp_concur'] = df_dhratio['hosp_concur'].rolling(7).mean().shift(hosp_concur_shift)
+        df_dhratio = df_dhratio.dropna()
+
+        deaths_hosp_rat = np.linalg.lstsq(df_dhratio['deaths_daily'].values.reshape(-1, 1),
+                                          df_dhratio['hosp_concur'], rcond=None)[0][0]
 
         old_ratio = model_dict['covid_params']['hosp_rt'] / model_dict['covid_params']['mort_rt']
         model_dict['covid_params']['hosp_rt'] = ((deaths_hosp_rat / old_ratio - 1) / 2 + 1) * model_dict['covid_params']['hosp_rt']
         model_dict['covid_params']['mort_rt'] = model_dict['covid_params']['hosp_rt'] / deaths_hosp_rat
 
-    model_dict['df_rts_conf'] = est_all_rts(model_dict)
+    model_dict = est_all_rts(model_dict)
     model_dict['df_rts'] = model_dict['df_rts_conf'].unstack().swaplevel(axis=1)['rt']
     model_dict['covid_params']['basic_r0'] = model_dict['df_rts']['weighted_average'].max()
 
@@ -633,7 +765,7 @@ def make_model_dict_state(state_code, abbrev_us_state, df_census, df_st_testing_
 
     return model_dict
 
-def make_model_dict_us(df_census, df_st_testing_fmt, covid_params, d_to_forecast = 75,
+def make_model_dict_us(df_census, df_st_testing_fmt, df_hhs_hosp, covid_params, d_to_forecast = 75,
                         df_mvmt=pd.DataFrame(), df_interventions=pd.DataFrame()):
     model_dict = {}
 
@@ -651,9 +783,16 @@ def make_model_dict_us(df_census, df_st_testing_fmt, covid_params, d_to_forecast
     model_dict['df_hist']['pos_neg_tests_tot'] = df_st_testing_fmt['posNeg'].sum(axis=1)
     model_dict['df_hist']['pos_neg_tests_daily'] = model_dict['df_hist']['pos_neg_tests_tot'].diff()
 
+    try:
+        model_dict['df_hist']['hosp_beds_tot'] = df_hhs_hosp['Total Inpatient Beds'].loc[model_dict['region_code']]
+        model_dict['df_hist']['hosp_beds_avail'] = df_hhs_hosp['hosp_beds_avail'].loc[model_dict['region_code']]
+    except:
+        print('hosp capacity data not available for {}'.format(model_dict['region_code']))
+
     model_dict['covid_params'] = covid_params
 
-    model_dict['df_rts_conf'] = est_all_rts(model_dict)
+    # model_dict['df_rts_conf'] = est_all_rts(model_dict)
+    model_dict = est_all_rts(model_dict)
     model_dict['df_rts'] = model_dict['df_rts_conf'].unstack().swaplevel(axis=1)['rt']
     model_dict['covid_params']['basic_r0'] = model_dict['df_rts']['weighted_average'].max()
 

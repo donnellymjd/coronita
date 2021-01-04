@@ -34,6 +34,8 @@ df_goog_mob_us = get_goog_mvmt_us()
 df_goog_mob_state = get_goog_mvmt_state(df_goog_mob_us)
 df_goog_mob_us = df_goog_mob_us[df_goog_mob_us.state.isnull()].set_index('dt')
 
+df_hhs_hosp = get_hhs_hosp()
+
 #######################
 
 ## MODEL PARAMETERS ##
@@ -49,7 +51,7 @@ covid_params['d_in_hosp_mild'] = 11.0
 covid_params['icu_rt'] = 13./41.
 covid_params['d_in_icu'] = 13.0
 covid_params['vent_rt'] = 0.4
-covid_params['d_til_death'] =  17.0
+covid_params['d_til_death'] =  30.0 #17.0
 covid_params['policy_trigger'] = True
 covid_params['policy_trigger_once'] = True
 days_to_forecast = 150
@@ -76,7 +78,7 @@ df_wavg_rt_conf_allregs = pd.DataFrame()
 for state in df_census.state.unique():
     print(state)
     
-    model_dict = make_model_dict_state(state, abbrev_us_state, df_census, df_st_testing_fmt,
+    model_dict = make_model_dict_state(state, abbrev_us_state, df_census, df_st_testing_fmt, df_hhs_hosp,
                                        covid_params, days_to_forecast,
                                        df_mvmt=df_goog_mob_state
                                      , df_interventions=df_interventions
@@ -105,7 +107,7 @@ for state in df_census.state.unique():
     print('Peak ICU #: {:.0f}'.format(df_agg.icu.max()))
     print('Peak Ventilator #: {:.0f}'.format(df_agg.vent.max()))
 
-    model_dict['chart_title'] = r'No Change in Future $R_{t}$ Until 20% Hospital Capacity Trigger'
+    model_dict['chart_title'] = r'No Change in Future $R_{t}$ Until Reaching Hospital Capacity Triggers Lockdown'
 
     allstate_model_dicts[state] = model_dict
     df_fore_allstates = pd.concat([df_fore_allstates,pd.DataFrame(df_agg.stack(), columns=[state])], axis=1)
@@ -124,10 +126,10 @@ df_fore_us = df_fore_us.loc[:last_fore_dt]
 df_fore_us_stack = pd.DataFrame(df_fore_us.stack(), columns=['US'])
 df_fore_allstates = pd.concat([df_fore_allstates, df_fore_us_stack], axis=1)
 
-model_dict = make_model_dict_us(df_census, df_st_testing_fmt, covid_params, d_to_forecast=75,
+model_dict = make_model_dict_us(df_census, df_st_testing_fmt, df_hhs_hosp, covid_params, d_to_forecast=75,
                                df_mvmt=df_goog_mob_us, df_interventions=df_interventions)
 model_dict['df_agg'] = df_fore_us
-model_dict['chart_title'] = r'No Change in Future $R_{t}$ Until 20% Hospital Capacity Trigger'
+model_dict['chart_title'] = r'No Change in Future $R_{t}$ Until Reaching Hospital Capacity Triggers Lockdown'
 allstate_model_dicts['US'] = model_dict
 
 this_reg_df_wavg = pd.DataFrame(

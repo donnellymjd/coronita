@@ -415,3 +415,21 @@ def get_counties_geo():
         counties = json.load(response)
     print('Got counties geo json')
     return counties
+
+def get_hhs_hosp():
+    hhs_json = pd.read_json(
+        'https://healthdata.gov/api/3/action/package_show?id=060e4acc-241d-4d19-a929-f5f7b653c648')
+    #         'https://healthdata.gov/api/3/action/package_show?id=83b4a668-9321-4d8c-bc4f-2bef66c49050&page=0')
+    hhs_csv_url = hhs_json['result'][0]['resources'][0]['url']
+    df_hhs_hosp = pd.read_csv(hhs_csv_url)
+    df_hhs_hosp['state'] = df_hhs_hosp['state'].replace('CW', 'US')
+    df_hhs_hosp['dt'] = pd.to_datetime(df_hhs_hosp['collection_date']).dt.normalize()
+    df_hhs_hosp = df_hhs_hosp.set_index(['state', 'dt']).sort_index()
+    df_hhs_hosp['Total Inpatient Beds'] = pd.to_numeric(
+        df_hhs_hosp['Total Inpatient Beds'].str.replace(',', ''), errors='coerce')
+    df_hhs_hosp['Inpatient Beds Occupied Estimated'] = pd.to_numeric(
+        df_hhs_hosp['Inpatient Beds Occupied Estimated'].str.replace(',', ''), errors='coerce')
+    df_hhs_hosp['hosp_beds_avail'] = df_hhs_hosp['Total Inpatient Beds'] - df_hhs_hosp[
+        'Inpatient Beds Occupied Estimated']
+    print('Got HHS hospitalization data.')
+    return df_hhs_hosp

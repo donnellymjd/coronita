@@ -82,6 +82,8 @@ df_goog_mob_us = get_goog_mvmt_us()
 df_goog_mob_state = get_goog_mvmt_state(df_goog_mob_us)
 df_goog_mob_us = df_goog_mob_us[df_goog_mob_us.state.isnull()].set_index('dt')
 
+df_hhs_hosp = get_hhs_hosp()
+
 list_of_files = glob.glob('./output/df_fore_allstates_*.pkl') # * means all if need specific format then *.csv
 latest_file = max(list_of_files, key=os.path.getctime)
 print(latest_file)
@@ -111,7 +113,7 @@ fig = add_plotly_footnote(fig)
 fig.write_html('../COVIDoutlook/forecasts/plotly/ch_exposure_prob.html', include_plotlyjs='cdn')
 fig.write_image('../COVIDoutlook/assets/images/covid19/ch_exposure_prob.png')
 
-tab_html, df_tab, df_tab_us = tab_summary(df_st_testing_fmt, df_fore_allstates, df_census, df_wavg_rt_conf_allregs)
+tab_html, df_tab, df_tab_us = tab_summary(df_st_testing_fmt, df_fore_allstates, df_census, df_wavg_rt_conf_allregs, df_hhs_hosp)
 text_file = open("../COVIDoutlook/forecasts/plotly/summ_tab.html", "w")
 text_file.write(tab_html)
 text_file.close()
@@ -156,7 +158,7 @@ region_code = 'US'
 model_dict = allstate_model_dicts[region_code]
 
 df_agg = model_dict['df_agg']
-scenario_name = 'No Change in Future Rᵗ Until 20% Hospital Capacity Trigger'
+scenario_name = 'No Change in Future $R_{t}$ Until Reaching Hospital Capacity Triggers Lockdown'
 chart_title = ""  # "{1} Scenario".format(model_dict['region_name'], scenario_name)
 param_str = param_str_maker(model_dict)
 
@@ -447,12 +449,21 @@ layout: page
 title: Data
 banner: duotone5.png
 ---
-This data page, like the rest of the site, is brand new. Unfortunately, it's not fully functional yet. Please check back here soon for downloadable datasets of the forecasts and other data displayed on this website.
+### Data Sources
+Our models and charts rely on data from a variety of publicly available datasets. These data providers depend on reliable and accurate reporting by national, state, and local governments. In many cases, the data reported by these governmental entities changes over time. This makes our jobs much more difficult as we have to account for some jurisdictions providing all necessary data on a daily basis, while other jurisdictions report less frequently or do not report some data at all. More and better data is necessary for high quality analysis and forecasts. If your state is showing incomplete data in our charts, ask your representatives to demand better reporting. 
+ - [COVID-19 Tracking Project](https://api.covidtracking.com/v1/states/daily.csv) - The single most important source of data for our models. This volunteer run project collects and distributes state-level data on cases, testing, hospitalizations, and deaths. 
+ - [Johns Hopkins University](https://github.com/CSSEGISandData/COVID-19/tree/master/csse_covid_19_data/csse_covid_19_time_series) - County-level data on cases and deaths.
+ - [New York Times](https://github.com/nytimes/covid-19-data/raw/master/us-counties.csv) - County-level data on cases and deaths.
+ - [NYC Dept of Health](https://github.com/nychealth/coronavirus-data/raw/master/case-hosp-death.csv) - Borough-level data on cases,  hospitalizations, and deaths.
+ - [NYS Dept of Health](https://health.data.ny.gov/api/views/xdss-u53e/rows.csv?accessType=DOWNLOAD) - County-level data on cases and total tests.
+ - [US Census](https://www2.census.gov/programs-surveys/popest/datasets/2010-2019/counties/totals/co-est2019-alldata.csv) - County-level data on populations.
+ - [Google Mobility Data](https://www.gstatic.com/covid19/mobility/Global_Mobility_Report.csv) - While currently not used in our models, this data powers our mobility tracking charts.
+ - [US Dept of HHS - Hopsital Capacity](https://healthdata.gov/api/3/action/package_show?id=060e4acc-241d-4d19-a929-f5f7b653c648) - After the CDC stopped collecting this data earlier in 2020, the HHS began collecting and hosting data reported by states of currently reported hospital bed capacity.
 
 ### Reference Downloads (comma separated values)
  - [COVID-19 Related Policy Actions by State - Source: KFF.org](https://raw.githubusercontent.com/donnellymjd/COVIDoutlook/master/download/df_interventions.csv)
 
-### Forecast Downloads (comma separated values)
+### Our Forecasts (comma separated values)
 {}
 """
 
