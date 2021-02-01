@@ -184,6 +184,8 @@ def seir_model_cohort(start_dt, model_dict, exposed_0=100, infectious_0=100):
         r_t = r_t.fillna(model_dict['df_rts'].loc[local_r0_date:, 'weighted_average'])
         r_t = r_t.fillna(method='bfill').fillna(method='ffill')
 
+    last_obs_rt = model_dict['df_rts']['weighted_average'].last_valid_index()
+
     model_dict['df_rts'] = model_dict['df_rts'].reindex(r_t.index)
     model_dict['df_rts']['policy_triggered'] = 0
     model_dict['hosp_cap_dt'] = None
@@ -194,7 +196,7 @@ def seir_model_cohort(start_dt, model_dict, exposed_0=100, infectious_0=100):
         cohort_strt = start_dt + pd.Timedelta(days=t_)
 
         if (model_dict['covid_params']['policy_trigger']
-                and (cohort_strt > model_dict['df_rts']['weighted_average'].last_valid_index()) ):
+                and (cohort_strt > last_obs_rt) ):
 
             if 'hosp_beds_avail' in model_dict['df_hist'].columns:
                 covid_hosp_capacity = model_dict['df_hist']['hosp_beds_avail'].replace(0,np.nan).rolling(7).mean().dropna().iloc[-1]
@@ -210,6 +212,18 @@ def seir_model_cohort(start_dt, model_dict, exposed_0=100, infectious_0=100):
                 model_dict['df_rts'].loc[cohort_strt, 'policy_triggered'] = 1
                 if model_dict['hosp_cap_dt'] == None:
                     model_dict['hosp_cap_dt'] = cohort_strt
+
+        # ACCOUNT FOR EFFECT OF IMMUNITY IN FORECAST PERIOD #
+        # Math:
+        # rt / (suspop_lastdayofobs / tot_pop) * (suspop_t / tot_pop)
+        # rt * (tot_pop / suspop_lastdayofobs) * (suspop_t / tot_pop)
+        # # tot_pop cancels
+        # rt * suspop_t / suspop_lastdayofobs
+        if cohort_strt == last_obs_rt:
+            suspop_lastdayofobs = next_suspop
+        elif (cohort_strt > last_obs_rt):
+            suspop_t = next_suspop #df_agg.loc[cohort_strt - pd.Timedelta(days=1), 'susceptible']
+            r_t.loc[cohort_strt] = r_t.loc[cohort_strt] * (suspop_t / suspop_lastdayofobs)
 
         this_r = r_t.loc[cohort_strt]
         beta = this_r * _gamma
@@ -252,12 +266,31 @@ def seir_model_cohort(start_dt, model_dict, exposed_0=100, infectious_0=100):
             print(df_daily_cohort)
             raise Exception('Daily Cohort total population varies significantly')
 
+
         df_agg = df_all_cohorts.sum(axis=1).unstack()
         df_agg.index = pd.DatetimeIndex(df_agg.index).normalize()
+
+        # VACCINE IMPACT #
+        if 'vaccine_prop_t' in model_dict.keys():
+            newly_vaccinated = model_dict['vaccine_prop_t'].diff().loc[cohort_strt - pd.Timedelta(days=7)] * model_dict['tot_pop']
+            # We need to make an adjustment for the fact that some people in the recovered population are also getting vaccinated.
+            prop_recovered = df_agg.loc[cohort_strt, 'recovered'] / model_dict['tot_pop']
+            prop_vaxxed = model_dict['vaccine_prop_t'].loc[cohort_strt - pd.Timedelta(days=1)]
+            # Proportion of population recovered by not yet vaccinated...
+            prop_recovered_unvax = prop_recovered - prop_vaxxed
+            new_justvax_recovered = newly_vaccinated * (1 - prop_recovered_unvax)
+        else:
+            new_justvax_recovered = 0
+        idx = pd.IndexSlice
+        df_all_cohorts.loc[idx[:, ['recovered']], cohort_strt] = df_all_cohorts.loc[idx[:, ['recovered']], cohort_strt] + new_justvax_recovered
+
+        df_agg = df_all_cohorts.sum(axis=1).unstack()
+        df_agg.index = pd.DatetimeIndex(df_agg.index).normalize()
+
         next_infectious = df_agg.loc[cohort_strt, 'infectious']
         # next_hospitalized = df_agg.loc[cohort_strt, 'hospitalized']
         next_hospitalized = lvl_adj_forecast(model_dict['df_hist']['hosp_concur'], df_agg['hospitalized']).loc[cohort_strt]
-        next_suspop = suspop[-1] + dS
+        next_suspop = max(suspop[-1] + dS - new_justvax_recovered, 0)
         suspop.append(next_suspop)
 
         totpopchk = df_agg.loc[cohort_strt, ['exposed', 'infectious', 'recovered', 'hospitalized', 'deaths']].sum()
