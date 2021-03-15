@@ -418,7 +418,9 @@ def get_counties_geo():
 
 def get_hhs_hosp():
     hhs_json = pd.read_json(
-        'https://healthdata.gov/api/3/action/package_show?id=060e4acc-241d-4d19-a929-f5f7b653c648')
+        # TODO this API will be full retired in a few weeks, but the code should keep working using the legacy url.
+        # Need to port the code to use the new API, released this weekend...
+        'https://legacy.healthdata.gov/api/3/action/package_show?id=060e4acc-241d-4d19-a929-f5f7b653c648')
     #         'https://healthdata.gov/api/3/action/package_show?id=83b4a668-9321-4d8c-bc4f-2bef66c49050&page=0')
     hhs_csv_url = hhs_json['result'][0]['resources'][0]['url']
     df_hhs_hosp = pd.read_csv(hhs_csv_url)
