@@ -73,7 +73,8 @@ def bar_and_line_chart(bar_series, bar_name='', bar_color='#008fd5',
     if isinstance(bar2_series, pd.Series):
         ax.bar(bar2_series.index, bar2_series, color=bar2_color, label=bar2_name, width=1.0)
 
-    ax.plot(line_series.index, line_series, linestyle='-', color=line_color, label=line_name)
+    if isinstance(line_series, pd.Series):
+        ax.plot(line_series.index, line_series, linestyle='-', color=line_color, label=line_name)
 
     # set ticks every week
     # ax.xaxis.set_major_locator(mpl.dates.WeekdayLocator())
@@ -172,7 +173,7 @@ def ch_exposed_infectious(model_dict):
                             legend=True, color=['#e5ae38', '#fc4f30'])
     ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0f}'))
 
-    plt.legend(title='Lext Axis Legend', labels=['Exposed Population', 'Infectious Population'],
+    plt.legend(title='Left Axis Legend', labels=['Exposed Population', 'Infectious Population'],
                loc='upper left', bbox_to_anchor=(1.07, 0.95), ncol=1)
     ax.set_ylim([0, ax.axes.get_yticks().max()])
     ax.set_yticks(np.linspace(0, ax.axes.get_yticks().max(), 5))
@@ -313,7 +314,6 @@ def ch_hosp(model_dict):
     ax = today_vline(ax)
     ax = hospcap_vline(ax, model_dict)
     return ax
-
 
 def ch_hosp_concur(model_dict):
     reported_name = 'hosp_concur'
@@ -584,12 +584,15 @@ def ch_population_share(model_dict):
     param_str = param_str_maker(model_dict)
     df_agg = model_dict['df_agg']
 
-    df_chart = df_agg[['susceptible', 'deaths', 'exposed', 'hospitalized', 'infectious', 'recovered']].dropna(how='all')
+    df_chart = df_agg[['susceptible', 'deaths', 'exposed', 'hospitalized', 'infectious', 'recovered_unvaccinated',
+                       'vaccinated_prev_infected', 'vaccinated_never_infected']].dropna(how='all')
     df_chart = df_chart.rename(columns={'susceptible':'Forecast Susceptible Population',
                                         'exposed':'Forecast Exposures',
                                         'infectious':'Forecast Infectious',
                                         'hospitalized':'Forecast Hospitalizations',
-                                        'recovered':'Forecast Recoveries',
+                                        'recovered_unvaccinated':'Forecast Recoveries, Unvaccinated',
+                                        'vaccinated_prev_infected':'Forecast Recoveries, Vaccinated',
+                                        'vaccinated_never_infected':'Forecast Vaccinated, Never Infected',
                                         'deaths':'Forecast Deaths'})
     df_chart = df_chart.clip(lower=0)
     df_chart = df_chart.iloc[8:]
@@ -605,7 +608,7 @@ def ch_population_share(model_dict):
     ax.set_ylabel('Population')
     ax2.set_ylim([0, 1.0])
     ax2.set_yticks(np.linspace(0, 1.0, 5), minor=False)
-    ax2.set_yticks(np.linspace(0, 1.0, 20), minor=True) # Replaced 25 with 20
+    ax2.set_yticks(np.linspace(0, 1.0, 21), minor=True) # Replaced 25 with 21
     ax2.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0%}'))
     ax2.tick_params(axis='y', reset=True, direction='inout', which='minor', color='black', left=True,
                     length=10 , width=1)
@@ -871,6 +874,32 @@ def ch_detection_rt(model_dict):
 
     return ax
 
+def ch_vax_status(model_dict):
+    ax = bar_and_line_chart(bar_series=model_dict['df_hist']['vax_initiated'].dropna(how='all').interpolate(),
+                       bar_name='Vaccinations Initiated', yformat='{:0,.0f}',
+                       chart_title='{}: People Vaccinated, by status'.format(model_dict['region_name']),
+                            line_series=model_dict['df_agg'][['vaccinated_prev_infected',
+       'vaccinated_never_infected']].sum(axis=1), line_name='Forecast Vaccinations Completed', line_color='#008fd5',
+                       bar2_series=model_dict['df_hist']['vax_completed'].dropna(how='all'),
+                       bar2_name='Vaccinations Completed',
+                       footnote_str=model_dict['footnote_str'],
+                       bar_color='#80d4ff', bar2_color='#f3daa5'#, line_color='#008fd5'
+                       )
+    return ax
+
+def ch_vax_status(model_dict):
+    ax = bar_and_line_chart(bar_series=model_dict['df_hist']['vax_initiated'].dropna(how='all').interpolate(),
+                       bar_name='Vaccinations Initiated', yformat='{:0,.0f}',
+                       chart_title='{}: People Vaccinated, by status'.format(model_dict['region_name']),
+                            line_series=model_dict['df_agg'][['vaccinated_prev_infected',
+       'vaccinated_never_infected']].sum(axis=1), line_name='Forecast Vaccinations Completed', line_color='#008fd5',
+                       bar2_series=model_dict['df_hist']['vax_completed'].dropna(how='all'),
+                       bar2_name='Vaccinations Completed',
+                       footnote_str=model_dict['footnote_str'],
+                       bar_color='#80d4ff', bar2_color='#f3daa5'#, line_color='#008fd5'
+                       )
+    return ax
+
 ### MULTI-REGION CHARTS ###
 def ch_rt_summary(df_wavg_rt_conf_allregs):
     import plotly.express as px
@@ -1098,10 +1127,10 @@ def ch_statemap2(df_chart, region_name, scale_max, counties, fitbounds='location
 
     return fig
 
-def ch_statemap_casechange(model_dict, df_counties, counties_geo, fitbounds='locations'):
+def ch_statemap_casechange(model_dict, counties_geo, fitbounds='locations'):
     region_name = model_dict['region_name']
 
-    df_chart = df_counties['cases_per100k']
+    df_chart = model_dict['df_counties']['cases_per100k']
     df_chart = df_chart.unstack(['state', 'county', 'fips']).diff(periods=14)
     df_chart = df_chart.dropna(how='all', axis=1)
     df_chart = df_chart.apply(lambda x: x[x.last_valid_index()]).reset_index()
@@ -1208,7 +1237,7 @@ def calc_trend(series, threshold):
     df = pd.cut(df.stack(), [-np.inf, -1*threshold, threshold, np.inf], labels=['▼','▶','▲'])
     return df.unstack().iloc[-1]
 
-def tab_summary(df_st_testing_fmt, df_fore_allstates, df_census, df_wavg_rt_conf_allregs, df_hhs_hosp):
+def tab_summary(df_st_testing_fmt, df_fore_allstates, df_census, df_wavg_rt_conf_allregs, df_hhs_hosp, df_can):
     df_tab = df_census[df_census.SUMLEV == 40].copy()
     df_tab = df_tab.set_index('state')
 
@@ -1242,11 +1271,11 @@ def tab_summary(df_st_testing_fmt, df_fore_allstates, df_census, df_wavg_rt_conf
         df_st_testing_fmt['cases'].fillna(method='ffill').div(df_tab.pop2019).mul(1e5).diff(),
         0.5)
     # Positivity Rate
-    df_tab['Positivity Rate'] = df_st_testing_fmt['cases'].diff().rolling(14).sum().iloc[-1].div(
-        df_st_testing_fmt['posNeg'].diff().rolling(14).sum().iloc[-1])
+    df_tab['Positivity Rate'] = df_st_testing_fmt['cases'].diff().rolling(14).sum().div(
+        df_st_testing_fmt['posNeg'].diff().rolling(14).sum()).fillna(method='ffill').iloc[-1]
     df_tab['positivity_trend'] = calc_trend(
         df_st_testing_fmt['cases'].diff().rolling(14).sum().div(
-            df_st_testing_fmt['posNeg'].diff().rolling(14).sum()),
+            df_st_testing_fmt['posNeg'].diff().rolling(14).sum()).fillna(method='ffill'),
         0.005)
     # Hospitalizations
     df_tab['Hospitalized'] = df_st_testing_fmt['hospitalizedCurrently'].fillna(method='ffill').iloc[-1]
@@ -1254,11 +1283,11 @@ def tab_summary(df_st_testing_fmt, df_fore_allstates, df_census, df_wavg_rt_conf
     df_tab['hospconcur_trend'] = calc_trend(
         df_st_testing_fmt['hospitalizedCurrently'].fillna(method='ffill').div(df_tab.pop2019).mul(1e5),
         0.5)
-    df_tab['14-Day Avg Daily Hosp Admits'] = df_st_testing_fmt['hospitalizedCumulative'].diff().fillna(method='ffill') \
+    df_tab['14-Day Avg Daily Hosp Admits'] = df_st_testing_fmt['hospitalizedIncrease'].fillna(method='ffill') \
         .rolling(14).mean().iloc[-1]
     df_tab['14-Day Avg Daily Hosp Admits per 100k'] = df_tab['14-Day Avg Daily Hosp Admits'].div(df_tab.pop2019).mul(1e5)
     df_tab['hospadmits_trend'] = calc_trend(
-        df_st_testing_fmt['hospitalizedCumulative'].diff().fillna(method='ffill').div(df_tab.pop2019).mul(1e5),
+        df_st_testing_fmt['hospitalizedIncrease'].fillna(method='ffill').div(df_tab.pop2019).mul(1e5),
         0.05)
 
     # df_tab.loc[:, [col for col in df_tab.columns if '_trend' in col]] = df_tab.loc[:, [col for col in df_tab.columns if '_trend' in col]].fillna('')
@@ -1285,8 +1314,8 @@ def tab_summary(df_st_testing_fmt, df_fore_allstates, df_census, df_wavg_rt_conf
 
     ## US Table ##
     df_tab_us = pd.DataFrame(df_tab.sum(skipna=False)).T
-    df_tab_us['Positivity Rate'] = (df_st_testing_fmt['cases'].diff().rolling(14).sum().sum(axis=1).iloc[-1]
-                                    / df_st_testing_fmt['posNeg'].diff().rolling(14).sum().sum(axis=1).iloc[-1])
+    df_tab_us['Positivity Rate'] = df_st_testing_fmt['cases'].diff().rolling(14).sum().sum(axis=1).div(
+        df_st_testing_fmt['posNeg'].diff().rolling(14).sum().sum(axis=1)).iloc[-1]
     df_tab_us['Current Reproduction Rate (Rt)'] = df_wavg_rt_conf_allregs.unstack('metric').swaplevel(axis=1)['rt'].fillna(method='ffill')['US'].iloc[-1]
     ##############
 

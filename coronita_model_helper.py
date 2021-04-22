@@ -272,7 +272,10 @@ def seir_model_cohort(start_dt, model_dict, exposed_0=100, infectious_0=100):
 
         # VACCINE IMPACT #
         if 'vaccine_prop_t' in model_dict.keys():
-            newly_vaccinated = model_dict['vaccine_prop_t'].diff().loc[cohort_strt - pd.Timedelta(days=7)] * model_dict['tot_pop']
+            if cohort_strt - pd.Timedelta(days=7) < model_dict['vaccine_prop_t'].diff().first_valid_index():
+                newly_vaccinated = 0
+            else:
+                newly_vaccinated = model_dict['vaccine_prop_t'].diff().loc[cohort_strt - pd.Timedelta(days=7)] * model_dict['tot_pop']
             # We need to make an adjustment for the fact that some people in the recovered population are also getting vaccinated.
             prop_recovered = df_agg.loc[cohort_strt, 'recovered'] / model_dict['tot_pop']
             prop_vaxxed = model_dict['vaccine_prop_t'].loc[cohort_strt - pd.Timedelta(days=1)]
@@ -375,8 +378,8 @@ def model_find_start(this_guess, model_dict, exposed_0=None, infectious_0=None):
 
     # Change in error used to be < 0, but this makes a req for a big enough change.
     while ( ( (change_in_error <= 0) or override_cie )
-            # and ( this_guess >= ( first_hist_obs - pd.Timedelta(days=60) ) )
-            # and ( this_guess <= ( first_hist_obs + pd.Timedelta(days=60) ) )
+            and ( this_guess >= ( first_hist_obs - pd.Timedelta(days=60) ) )
+            and ( this_guess <= ( first_hist_obs + pd.Timedelta(days=60) ) )
     ):
         model_dict = orig_model_dict.copy()
         print('This guess: ', this_guess)
@@ -584,7 +587,7 @@ def est_all_rts(model_dict):
     df_lambdas = df_lambdas.replace([np.inf, -np.inf], np.nan)
     df_lambdas = df_lambdas.apply(outlier_removal, num_std=3)
 
-    # df_lambdas = df_lambdas.rolling(lookback, win_type='gaussian', center=True).mean(std=4) # Normal
+    df_lambdas = df_lambdas.rolling(lookback, win_type='gaussian', center=True).mean(std=4) # Normal
     # df_lambdas = df_lambdas.rolling(lookback, win_type='gaussian', center=True).mean(std=1) # Exp. Version for NYS
 
     wavg_lookback = lookback # Normal
@@ -710,8 +713,8 @@ def est_rt_wconf(lvl_series, lookback, d_infect):
 
     return df_rt
 
-def make_model_dict_state(state_code, abbrev_us_state, df_census, df_st_testing_fmt, df_hhs_hosp, covid_params, d_to_forecast = 75,
-                        df_mvmt=pd.DataFrame(), df_interventions=pd.DataFrame()):
+def make_model_dict_state(state_code, abbrev_us_state, df_census, df_st_testing_fmt, df_hhs_hosp, df_can,
+                          covid_params, d_to_forecast = 75, df_mvmt=pd.DataFrame(), df_interventions=pd.DataFrame()):
     model_dict = {}
 
     model_dict['region_code'] = state_code
@@ -793,12 +796,16 @@ def make_model_dict_state(state_code, abbrev_us_state, df_census, df_st_testing_
     else:
         model_dict['df_interventions'] = df_interventions
 
+    model_dict['df_hist']['vax_initiated'] = df_can.loc[model_dict['region_code'], 'actuals.vaccinationsInitiated']
+    model_dict['df_hist']['vax_completed'] = df_can.loc[model_dict['region_code'], 'actuals.vaccinationsCompleted']
+    model_dict['df_hist']['vax_halfcompleted'] = model_dict['df_hist']['vax_initiated'] - model_dict['df_hist']['vax_completed']
+
     model_dict['footnote_str'] = ''
     model_dict['chart_title'] = ''
 
     return model_dict
 
-def make_model_dict_us(df_census, df_st_testing_fmt, df_hhs_hosp, covid_params, d_to_forecast = 75,
+def make_model_dict_us(df_census, df_st_testing_fmt, df_hhs_hosp, df_can, covid_params, d_to_forecast = 75,
                         df_mvmt=pd.DataFrame(), df_interventions=pd.DataFrame()):
     model_dict = {}
 
@@ -808,12 +815,12 @@ def make_model_dict_us(df_census, df_st_testing_fmt, df_hhs_hosp, covid_params, 
 
     model_dict['df_hist'] = pd.DataFrame()
 
-    model_dict['df_hist']['deaths_tot'] = df_st_testing_fmt['deaths'].sum(axis=1)
+    model_dict['df_hist']['deaths_tot'] = df_st_testing_fmt['deaths'][df_census.state.unique()].sum(axis=1, skipna=False).dropna()
     model_dict['df_hist']['deaths_daily'] = model_dict['df_hist']['deaths_tot'].diff()
 
-    model_dict['df_hist']['cases_tot'] = df_st_testing_fmt['cases'].sum(axis=1)
+    model_dict['df_hist']['cases_tot'] = df_st_testing_fmt['cases'][df_census.state.unique()].sum(axis=1, skipna=False).dropna()
     model_dict['df_hist']['cases_daily'] = model_dict['df_hist']['cases_tot'].diff()
-    model_dict['df_hist']['pos_neg_tests_tot'] = df_st_testing_fmt['posNeg'].sum(axis=1)
+    model_dict['df_hist']['pos_neg_tests_tot'] = df_st_testing_fmt['posNeg'][df_census.state.unique()].sum(axis=1, skipna=False).dropna()
     model_dict['df_hist']['pos_neg_tests_daily'] = model_dict['df_hist']['pos_neg_tests_tot'].diff()
 
     try:
@@ -841,6 +848,11 @@ def make_model_dict_us(df_census, df_st_testing_fmt, df_hhs_hosp, covid_params, 
             df_interventions.state_code.isin(['US'])].groupby('dt').first().reset_index()
     else:
         model_dict['df_interventions'] = df_interventions
+
+    model_dict['df_hist']['vax_initiated'] = df_can['actuals.vaccinationsInitiated'].unstack('state').dropna(thresh=40).sum(axis=1)
+    model_dict['df_hist']['vax_completed'] = df_can['actuals.vaccinationsCompleted'].unstack('state').dropna(thresh=40).sum(axis=1)
+    model_dict['df_hist']['vax_halfcompleted'] = model_dict['df_hist']['vax_initiated'] - model_dict['df_hist'][
+        'vax_completed']
 
     model_dict['footnote_str'] = ''
     model_dict['chart_title'] = ''

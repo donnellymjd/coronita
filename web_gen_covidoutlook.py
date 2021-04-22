@@ -67,22 +67,24 @@ df_st_testing = get_covid19_tracking_data()
 
 df_census = get_census_pop()
 
-df_counties = get_complete_county_data()
+# df_counties = get_complete_county_data()
 
 counties_geo = get_counties_geo()
 
-df_jhu_counties = get_jhu_counties()
+# df_jhu_counties = get_jhu_counties()
 
 df_st_testing_fmt = df_st_testing.copy()
 df_st_testing_fmt = df_st_testing_fmt.rename(columns={'death':'deaths','positive':'cases'}).unstack('code')
 
 df_interventions = get_state_policy_events()
 
-df_goog_mob_us = get_goog_mvmt_us()
-df_goog_mob_state = get_goog_mvmt_state(df_goog_mob_us)
-df_goog_mob_us = df_goog_mob_us[df_goog_mob_us.state.isnull()].set_index('dt')
+# df_goog_mob_us = get_goog_mvmt_us()
+# df_goog_mob_state = get_goog_mvmt_state(df_goog_mob_us)
+# df_goog_mob_us = df_goog_mob_us[df_goog_mob_us.state.isnull()].set_index('dt')
 
 df_hhs_hosp = get_hhs_hosp()
+
+df_can = get_can_data()
 
 list_of_files = glob.glob('./output/df_fore_allstates_*.pkl') # * means all if need specific format then *.csv
 latest_file = max(list_of_files, key=os.path.getctime)
@@ -113,7 +115,8 @@ fig = add_plotly_footnote(fig)
 fig.write_html('../COVIDoutlook/forecasts/plotly/ch_exposure_prob.html', include_plotlyjs='cdn')
 fig.write_image('../COVIDoutlook/assets/images/covid19/ch_exposure_prob.png')
 
-tab_html, df_tab, df_tab_us = tab_summary(df_st_testing_fmt, df_fore_allstates, df_census, df_wavg_rt_conf_allregs, df_hhs_hosp)
+tab_html, df_tab, df_tab_us = tab_summary(df_st_testing_fmt, df_fore_allstates, df_census, df_wavg_rt_conf_allregs,
+                                          df_hhs_hosp, df_can)
 text_file = open("../COVIDoutlook/forecasts/plotly/summ_tab.html", "w")
 text_file.write(tab_html)
 text_file.close()
@@ -338,7 +341,8 @@ with io.open('../COVIDoutlook/reproduction.md', mode='w', encoding='utf-8') as f
 
 #### CREATE STATE CHARTS AND MD PAGES ####
 
-l_charts = ['ch_positivetests', 'ch_totaltests', 'ch_postestshare','ch_rt_confid', 'ch_detection_rt',
+l_charts = ['ch_positivetests', 'ch_totaltests', 'ch_postestshare', 'ch_vax_status' 
+            'ch_rt_confid', 'ch_detection_rt',
            'ch_statemap', 'ch_googmvmt',
            'ch_exposed_infectious', 'ch_hosp_concur','ch_deaths_tot',
            'ch_population_share',
@@ -358,7 +362,8 @@ d_chart_fns = {'ch_rt_confid': ch_rt_confid,
  'ch_cumul_infections': ch_cumul_infections,
  'ch_daily_exposures': ch_daily_exposures,
  'ch_hosp_admits': ch_hosp_admits,
- 'ch_daily_deaths': ch_daily_deaths}
+ 'ch_daily_deaths': ch_daily_deaths,
+               'ch_vax_status':ch_vax_status}
 
 state_plotly_html = '''<div>
     <iframe 
@@ -371,11 +376,6 @@ for state_code in list(df_census.state.unique()) + ['US']:
     model_dict = allstate_model_dicts[state_code]
     model_dict['footnote_str'] = footnote_str_maker()
 
-    # fig = ch_statemap2(df_counties.query('dt == dt.max() and state == "{}"'.format(state_code)),
-    #                    model_dict['region_name'],
-    #                    df_counties.query('dt == dt.max()').cases_per100k.quantile(.9),
-    #                    counties_geo
-    #                   )
     fig = ch_statemap_casechange(model_dict, df_counties, counties_geo)
     fig = add_plotly_footnote(fig)
     fig.write_html('../COVIDoutlook/forecasts/plotly/{}_casepercap_cnty_map.html'.format(

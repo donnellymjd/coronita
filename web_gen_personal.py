@@ -65,20 +65,20 @@ df_st_testing = get_covid19_tracking_data()
 
 df_census = get_census_pop()
 
-df_counties = get_complete_county_data()
+# df_counties = get_complete_county_data()
 
 counties_geo = get_counties_geo()
 
-df_jhu_counties = get_jhu_counties()
+# df_jhu_counties = get_jhu_counties()
 
 df_st_testing_fmt = df_st_testing.copy()
 df_st_testing_fmt = df_st_testing_fmt.rename(columns={'death':'deaths','positive':'cases'}).unstack('code')
 
 df_interventions = get_state_policy_events()
 
-df_goog_mob_us = get_goog_mvmt_us()
-df_goog_mob_state = get_goog_mvmt_state(df_goog_mob_us)
-df_goog_mob_us = df_goog_mob_us[df_goog_mob_us.state.isnull()].set_index('dt')
+# df_goog_mob_us = get_goog_mvmt_us()
+# df_goog_mob_state = get_goog_mvmt_state(df_goog_mob_us)
+# df_goog_mob_us = df_goog_mob_us[df_goog_mob_us.state.isnull()].set_index('dt')
 
 list_of_files = glob.glob('./output/df_fore_allstates_*.pkl') # * means all if need specific format then *.csv
 latest_file = max(list_of_files, key=os.path.getctime)
@@ -115,6 +115,7 @@ l_pdfs_out = []
 
 l_charts = ['ch_rt_confid',
            'ch_positivetests', 'ch_totaltests', 'ch_postestshare',
+            'ch_vax_status',
            'ch_detection_rt',
            'ch_statemap', 'ch_googmvmt',
            'ch_rts', 'ch_exposed_infectious', 'ch_hosp_concur','ch_deaths_tot',
@@ -138,19 +139,15 @@ d_chart_fns = {'ch_rt_confid': ch_rt_confid,
  'ch_daily_exposures': ch_daily_exposures,
  'ch_hosp_admits': ch_hosp_admits,
  'ch_daily_deaths': ch_daily_deaths,
- 'ch_doubling_rt': ch_doubling_rt}
+ 'ch_doubling_rt': ch_doubling_rt,
+               'ch_vax_status':ch_vax_status}
 
 for state_code in list(df_census.state.unique()) + ['US']:
     print(state_code)
     model_dict = allstate_model_dicts[state_code]
     model_dict['footnote_str'] = footnote_str_maker()
 
-    # fig = ch_statemap2(df_counties.query('dt == dt.max() and state == "{}"'.format(state_code)),
-    #                    model_dict['region_name'],
-    #                    df_counties.query('dt == dt.max()').cases_per100k.quantile(.9),
-    #                    counties_geo
-    #                   )
-    fig = ch_statemap_casechange(model_dict, df_counties, counties_geo)
+    fig = ch_statemap_casechange(model_dict, counties_geo)
     fig = add_plotly_footnote(fig)
     pio.orca.shutdown_server()
     fig.write_html('../donnellymjd.github.io/_covid19/datacenter/plotly/{}_casepercap_cnty_map.html'.format(

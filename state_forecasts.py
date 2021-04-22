@@ -16,11 +16,9 @@ df_st_testing = get_covid19_tracking_data()
 
 df_census = get_census_pop()
 
-df_counties = get_complete_county_data()
+# counties_geo = get_counties_geo()
 
-counties_geo = get_counties_geo()
-
-df_jhu_counties = get_jhu_counties()
+# df_jhu_counties = get_jhu_counties()
 
 df_st_testing_fmt = df_st_testing.copy()
 df_st_testing_fmt = df_st_testing_fmt.rename(columns={'death':'deaths','positive':'cases'}).unstack('code')
@@ -32,9 +30,15 @@ except:
 
 df_goog_mob_us = get_goog_mvmt_us()
 df_goog_mob_state = get_goog_mvmt_state(df_goog_mob_us)
-df_goog_mob_us = df_goog_mob_us[df_goog_mob_us.state.isnull()].set_index('dt')
+# df_goog_mob_us = df_goog_mob_us[df_goog_mob_us.state.isnull()].set_index('dt')
+
+df_counties = get_complete_county_data(df_census, df_goog_mob_us)
 
 df_hhs_hosp = get_hhs_hosp()
+
+df_can = get_can_data()
+
+df_vax_hes = get_vax_hesitancy_data()
 
 #######################
 
@@ -78,7 +82,7 @@ df_wavg_rt_conf_allregs = pd.DataFrame()
 for state in df_census.state.unique():
     print(state)
     
-    model_dict = make_model_dict_state(state, abbrev_us_state, df_census, df_st_testing_fmt, df_hhs_hosp,
+    model_dict = make_model_dict_state(state, abbrev_us_state, df_census, df_st_testing_fmt, df_hhs_hosp, df_can,
                                        covid_params, days_to_forecast,
                                        df_mvmt=df_goog_mob_state
                                      , df_interventions=df_interventions
@@ -115,6 +119,7 @@ for state in df_census.state.unique():
 #######################
 
 ### Add US Country Level Entries Before Saving ###
+df_fore_allstates = df_fore_allstates[[state for state in df_fore_allstates.columns if state != 'US']]
 df_fore_us = df_fore_allstates.sum(axis=1, skipna=True).unstack('metric').dropna(how='all')
 tot_pop = df_fore_us[['susceptible', 'deaths', 'exposed', 'hospitalized', 'infectious', 'recovered']].sum(axis=1)
 max_tot_pop = tot_pop.max()
@@ -126,7 +131,7 @@ df_fore_us = df_fore_us.loc[:last_fore_dt]
 df_fore_us_stack = pd.DataFrame(df_fore_us.stack(), columns=['US'])
 df_fore_allstates = pd.concat([df_fore_allstates, df_fore_us_stack], axis=1)
 
-model_dict = make_model_dict_us(df_census, df_st_testing_fmt, df_hhs_hosp, covid_params, d_to_forecast=75,
+model_dict = make_model_dict_us(df_census, df_st_testing_fmt, df_hhs_hosp, df_can, covid_params, d_to_forecast=75,
                                df_mvmt=df_goog_mob_us, df_interventions=df_interventions)
 model_dict['df_agg'] = df_fore_us
 model_dict['chart_title'] = r'No Change in Future $R_{t}$ Until Reaching Hospital Capacity Triggers Lockdown'
