@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from scipy.stats import gamma
+from prophet import Prophet
 from statsmodels.stats.weightstats import DescrStatsW
 # from coronita_chart_helper import *
 
@@ -45,6 +46,8 @@ def lvl_adj_forecast(s_hist_lvl, s_fore_lvl): #lvl_adj_forecast(model_dict, hist
 
     hist_last_day = s_hist_lvl.last_valid_index()
     fore_diff_future = s_fore_lvl.diff().loc[hist_last_day + pd.Timedelta(days=1):]
+    jumping_off_scalar = (s_hist_lvl.loc[hist_last_day] / s_fore_lvl.loc[hist_last_day])
+    fore_diff_future = fore_diff_future * jumping_off_scalar
     fore_lvl_adjusted = fore_diff_future.cumsum().add(s_hist_lvl.loc[hist_last_day])
     fore_lvl_adjusted = fore_lvl_adjusted.reindex(s_fore_lvl.index)
     fore_lvl_adjusted = fore_lvl_adjusted.fillna(s_fore_lvl)
@@ -163,10 +166,21 @@ def daily_cohort_model(cohort_strt, d_to_fore, covid_params, E_0, I_0=0):
     return df_out
 
 def seir_model_cohort(start_dt, model_dict, exposed_0=100, infectious_0=100):
-    suspop = [model_dict['tot_pop'] - exposed_0 - infectious_0]
     next_infectious = infectious_0
     next_hospitalized = 0
     _gamma = 1 / (model_dict['covid_params']['d_infect'])
+
+    vax_new_people_daily = model_dict['df_hist']['vax_initiated'].diff() \
+        .reindex(model_dict['df_vax_fore'].index).fillna(model_dict['df_vax_fore']['trend'].diff())
+    vax_new_people_daily = vax_new_people_daily.reindex(index=pd.date_range(start_dt, vax_new_people_daily.index[-1]))
+    vax_new_people_daily = vax_new_people_daily.fillna(method='bfill')
+    next_recovered_vaxxed = 0
+    next_susceptible_vaxxed = vax_new_people_daily.loc[start_dt] if start_dt in vax_new_people_daily.index else 0
+    next_suspop = model_dict['tot_pop'] - exposed_0 - infectious_0 - next_susceptible_vaxxed
+
+    recovered_vaxxed = [next_recovered_vaxxed]
+    susceptible_vaxxed = [next_susceptible_vaxxed]
+    suspop = [next_suspop]
 
     t = np.linspace(0, model_dict['d_to_forecast'], model_dict['d_to_forecast'] + 1)
 
@@ -174,7 +188,8 @@ def seir_model_cohort(start_dt, model_dict, exposed_0=100, infectious_0=100):
     df_all_cohorts.columns.name = 'cohort_dt'
 
     r_t = pd.Series(np.nan, index=pd.date_range(start_dt,
-                                                start_dt + pd.Timedelta(days=model_dict['d_to_forecast']) ) )
+                                                max(start_dt + pd.Timedelta(days=model_dict['d_to_forecast']),
+                                                pd.Timestamp('2021-07-04'))))
 
     if 'rt_scenario' in model_dict['df_rts'].columns:
         r_t = r_t.fillna(model_dict['df_rts']['rt_scenario']).fillna(method='bfill').fillna(method='ffill')
@@ -183,6 +198,8 @@ def seir_model_cohort(start_dt, model_dict, exposed_0=100, infectious_0=100):
         # print('local_r0_date: ', local_r0_date)
         r_t = r_t.fillna(model_dict['df_rts'].loc[local_r0_date:, 'weighted_average'])
         r_t = r_t.fillna(method='bfill').fillna(method='ffill')
+    r_t_preimmune = r_t.copy()
+    # print(r_t.last_valid_index())
 
     last_obs_rt = model_dict['df_rts']['weighted_average'].last_valid_index()
 
@@ -194,6 +211,7 @@ def seir_model_cohort(start_dt, model_dict, exposed_0=100, infectious_0=100):
 
     for t_ in t[:-1]:
         cohort_strt = start_dt + pd.Timedelta(days=t_)
+        # print(f'cohort_strt: {cohort_strt}, next_suspop: {next_suspop}')
 
         if (model_dict['covid_params']['policy_trigger']
                 and (cohort_strt > last_obs_rt) ):
@@ -219,11 +237,30 @@ def seir_model_cohort(start_dt, model_dict, exposed_0=100, infectious_0=100):
         # rt * (tot_pop / suspop_lastdayofobs) * (suspop_t / tot_pop)
         # # tot_pop cancels
         # rt * suspop_t / suspop_lastdayofobs
+        if cohort_strt <= last_obs_rt:
+            r_t_preimmune.loc[cohort_strt] = r_t.loc[cohort_strt] / (
+                        next_suspop / model_dict['tot_pop']) if next_suspop > 0 else 1.0
+
         if cohort_strt == last_obs_rt:
-            suspop_lastdayofobs = next_suspop
-        elif (cohort_strt > last_obs_rt):
-            suspop_t = next_suspop #df_agg.loc[cohort_strt - pd.Timedelta(days=1), 'susceptible']
-            r_t.loc[cohort_strt] = r_t.loc[cohort_strt] * (suspop_t / suspop_lastdayofobs)
+            suspop_lastdayofobs = next_suspop if next_suspop > 0 else 1.0
+            # r_t_preimmune = r_t.div(suspop_lastdayofobs / model_dict['tot_pop'])
+            r_t_preimmune.loc[cohort_strt + pd.Timedelta(days=1):] = np.nan
+
+            current_r0 = model_dict['covid_params']['voc_transmissibility'] * model_dict['covid_params']['basic_r0']
+            current_r0 = max(min(current_r0, 3.0), 2.0)
+            # print(f'current_r0 {current_r0}')
+            if r_t_preimmune.loc[r_t_preimmune.last_valid_index()] > current_r0:
+                r_t_preimmune.loc['2021-07-04':] = r_t_preimmune.loc[r_t_preimmune.last_valid_index()]
+            else:
+                r_t_preimmune.loc['2021-07-04':] = current_r0
+            r_t_preimmune = r_t_preimmune.interpolate()
+            r_t_nochange = r_t.copy()
+            # if '2021-07-04' in r_t_preimmune.index:
+            #     print(r_t_preimmune.loc[cohort_strt], r_t_preimmune.loc['2021-07-04'])
+            # print(f'{cohort_strt} next_suspop: {next_suspop}')
+        elif cohort_strt > last_obs_rt:
+            r_t_nochange.loc[cohort_strt] = r_t_nochange.loc[cohort_strt] * (next_suspop / suspop_lastdayofobs)
+            r_t.loc[cohort_strt] = r_t_preimmune.loc[cohort_strt] * (next_suspop / model_dict['tot_pop'])
 
         this_r = r_t.loc[cohort_strt]
         beta = this_r * _gamma
@@ -248,44 +285,45 @@ def seir_model_cohort(start_dt, model_dict, exposed_0=100, infectious_0=100):
 
         else:
             # dS = -1 * min(beta * suspop[-1] * next_infectious / model_dict['tot_pop'], suspop[-1])
-            dS = -1 * min(beta * next_infectious , suspop[-1])
+            dS = -1 * min(beta * next_infectious, suspop[-1])
 
             df_daily_cohort = dS * -1 * df_daily_cohort_scalar.iloc[:int(d_to_fore)] / 1e6
 
             df_daily_cohort.index = pd.date_range(cohort_strt,
                                                   cohort_strt + pd.Timedelta(days=d_to_fore - 1))
             df_all_cohorts[cohort_strt] = df_daily_cohort.stack()
-            # print(cohort_strt, ' rt: ', this_r)
 
         d_cohort_totpop_std = round(df_daily_cohort[
                                         ['exposed', 'deaths', 'hospitalized', 'infectious', 'recovered']
                                     ].dropna().sum(axis=1).std(), 1)
 
         if d_cohort_totpop_std != 0.0:
+            print(cohort_strt, ' rt: ', this_r)
+            print(f'next suspop: {next_suspop}, prop_recovered: {prop_recovered}, next_vaxxed: {next_vaxxed}')
+            print(f'recovered: {df_agg.loc[cohort_strt, "recovered"]} next_susceptible_vaxxed: {next_susceptible_vaxxed}')
             print(cohort_strt, d_cohort_totpop_std)
             print(df_daily_cohort)
             raise Exception('Daily Cohort total population varies significantly')
-
 
         df_agg = df_all_cohorts.sum(axis=1).unstack()
         df_agg.index = pd.DatetimeIndex(df_agg.index).normalize()
 
         # VACCINE IMPACT #
-        if 'vaccine_prop_t' in model_dict.keys():
-            if cohort_strt - pd.Timedelta(days=7) < model_dict['vaccine_prop_t'].diff().first_valid_index():
-                newly_vaccinated = 0
-            else:
-                newly_vaccinated = model_dict['vaccine_prop_t'].diff().loc[cohort_strt - pd.Timedelta(days=7)] * model_dict['tot_pop']
-            # We need to make an adjustment for the fact that some people in the recovered population are also getting vaccinated.
-            prop_recovered = df_agg.loc[cohort_strt, 'recovered'] / model_dict['tot_pop']
-            prop_vaxxed = model_dict['vaccine_prop_t'].loc[cohort_strt - pd.Timedelta(days=1)]
-            # Proportion of population recovered by not yet vaccinated...
-            prop_recovered_unvax = prop_recovered - prop_vaxxed
-            new_justvax_recovered = newly_vaccinated * (1 - prop_recovered_unvax)
-        else:
-            new_justvax_recovered = 0
-        idx = pd.IndexSlice
-        df_all_cohorts.loc[idx[:, ['recovered']], cohort_strt] = df_all_cohorts.loc[idx[:, ['recovered']], cohort_strt] + new_justvax_recovered
+        # if 'vaccine_prop_t' in model_dict.keys():
+        #     if cohort_strt - pd.Timedelta(days=7) < model_dict['vaccine_prop_t'].diff().first_valid_index():
+        #         newly_vaccinated = 0
+        #     else:
+        #         newly_vaccinated = model_dict['vaccine_prop_t'].diff().loc[cohort_strt - pd.Timedelta(days=7)] * model_dict['tot_pop']
+        #     # We need to make an adjustment for the fact that some people in the recovered population are also getting vaccinated.
+        #     prop_recovered = df_agg.loc[cohort_strt, 'recovered'] / model_dict['tot_pop']
+        #     prop_vaxxed = model_dict['vaccine_prop_t'].loc[cohort_strt - pd.Timedelta(days=1)]
+        #     # Proportion of population recovered by not yet vaccinated...
+        #     prop_recovered_unvax = prop_recovered - prop_vaxxed
+        #     new_justvax_recovered = newly_vaccinated * (1 - prop_recovered_unvax)
+        # else:
+        #     new_justvax_recovered = 0
+        # idx = pd.IndexSlice
+        # df_all_cohorts.loc[idx[:, ['recovered']], cohort_strt] = df_all_cohorts.loc[idx[:, ['recovered']], cohort_strt] + new_justvax_recovered
 
         df_agg = df_all_cohorts.sum(axis=1).unstack()
         df_agg.index = pd.DatetimeIndex(df_agg.index).normalize()
@@ -293,33 +331,51 @@ def seir_model_cohort(start_dt, model_dict, exposed_0=100, infectious_0=100):
         next_infectious = df_agg.loc[cohort_strt, 'infectious']
         # next_hospitalized = df_agg.loc[cohort_strt, 'hospitalized']
         next_hospitalized = lvl_adj_forecast(model_dict['df_hist']['hosp_concur'], df_agg['hospitalized']).loc[cohort_strt]
-        next_suspop = max(suspop[-1] + dS - new_justvax_recovered, 0)
+        # next_suspop = max(suspop[-1] + dS, 0)
+
+        next_recovered = 0 if np.isnan(df_agg.loc[cohort_strt, 'recovered']) else df_agg.loc[cohort_strt, 'recovered']
+        prop_recovered = next_recovered / (next_recovered + suspop[-1] + dS)
+        # ^ Can be thought of as the prob that a vaccine is going to a person with antibodies
+        next_vaxxed = 0 if np.isnan(vax_new_people_daily.shift(28).loc[cohort_strt]) else vax_new_people_daily.shift(28).loc[cohort_strt]
+        next_recovered_vaxxed = prop_recovered * next_vaxxed
+        next_susceptible_vaxxed = (1 - prop_recovered) * next_vaxxed
+        # print(f'cohort_st: {cohort_strt} suspop: {suspop[-1]} dS: {dS}, next_susceptible_vaxxed: {next_susceptible_vaxxed}')
+        next_suspop = max(suspop[-1] + dS - (next_susceptible_vaxxed), 0)
+
+        recovered_vaxxed.append(recovered_vaxxed[-1] + next_recovered_vaxxed)
+        susceptible_vaxxed.append(susceptible_vaxxed[-1] + next_susceptible_vaxxed)
         suspop.append(next_suspop)
 
         totpopchk = df_agg.loc[cohort_strt, ['exposed', 'infectious', 'recovered', 'hospitalized', 'deaths']].sum()
 
         # if (round(totpopchk + suspop[-1]) != round(model_dict['tot_pop'])):
-        if abs((totpopchk + suspop[-1]) / model_dict['tot_pop'] - 1) > 1e-4:
+        if abs((totpopchk + suspop[-1] + susceptible_vaxxed[-1]) / model_dict['tot_pop'] - 1) > 1e-4:
             print(df_all_cohorts)
             print(df_all_cohorts.sum(axis=1).unstack())
             print(cohort_strt)
             print('totpop: ', round(model_dict['tot_pop']))
             print('dS ', dS)
             print('sum of df_agg', totpopchk)
-            print('suspop[-1]', suspop[-1])
-            print('sum of both', round(totpopchk + suspop[-1]))
+            print(f'suspop[-1]: {suspop[-1]} susceptible_vaxxed[-1]: {susceptible_vaxxed[-1]}')
+            print('sum of both', round(totpopchk + suspop[-1] + susceptible_vaxxed[-1]))
             raise Exception('Agg total population varies by more than 0.01%')
 
-    model_dict['df_rts']['rt_scenario'] = r_t
+    model_dict['df_rts']['rt_scenario'] = r_t.iloc[:-1]
+    model_dict['df_rts']['rt_nochange'] = r_t_nochange.iloc[:-1]
+    model_dict['df_rts']['rt_preimmune'] = r_t_preimmune.iloc[:-1]
 
     df_agg = df_all_cohorts.sum(axis=1).unstack()
     df_agg.index = pd.DatetimeIndex(df_agg.index).normalize()
 
-    s_suspop = pd.Series(suspop, index=pd.date_range(
+    list2series_dt_idx = pd.date_range(
         start_dt - pd.Timedelta(days=1),
-        start_dt + pd.Timedelta(days=model_dict['d_to_forecast'] - 1)))
+        start_dt + pd.Timedelta(days=model_dict['d_to_forecast'] - 1))
 
-    df_agg['susceptible'] = pd.Series(s_suspop)
+    df_agg['susceptible'] = pd.Series(suspop, index=list2series_dt_idx)
+    df_agg['vaccinated_prev_infected'] = pd.Series(recovered_vaxxed, index=list2series_dt_idx)
+    df_agg['vaccinated_never_infected'] = pd.Series(susceptible_vaxxed, index=list2series_dt_idx)
+    df_agg['recovered_unvaccinated'] = df_agg['recovered'] - df_agg['vaccinated_prev_infected']
+
     exposed_daily = df_all_cohorts.stack().unstack(['metric'])[['exposed']].reset_index()
     df_agg['exposed_daily'] = exposed_daily[(exposed_daily.dt == exposed_daily.cohort_dt)].set_index(['dt'])['exposed']
     df_agg['deaths_daily'] = df_agg['deaths'].diff()
@@ -331,9 +387,6 @@ def seir_model_cohort(start_dt, model_dict, exposed_0=100, infectious_0=100):
 
     model_dict['df_agg'] = df_agg.dropna()
     model_dict['df_all_cohorts'] = df_all_cohorts
-
-    # model_dict = lvl_adj_forecast(model_dict, 'hosp_concur', 'hospitalized')
-    # model_dict = lvl_adj_forecast(model_dict, 'deaths_tot', 'deaths')
 
     return model_dict
 
@@ -474,9 +527,9 @@ def est_all_rts(model_dict):
         df_weights['cases_daily'] = 0.5
         cases_shift = int(model_dict['covid_params']['d_incub'] + 2) * -1
 
-        cases_daily = df_hist['cases_daily'].add(1.0)
-        if outlier_removal(cases_daily, num_std=4).dropna().shape[0] / cases_daily.dropna().shape[0] > 0.8:
-            cases_daily = outlier_removal(cases_daily, num_std=4)
+        cases_daily = leading_zeros2nan(df_hist['cases_daily']).add(1.0)
+        # if outlier_removal(cases_daily, num_std=4).dropna().shape[0] / cases_daily.dropna().shape[0] > 0.8:
+        #     cases_daily = outlier_removal(cases_daily, num_std=4)
         # cases_daily = outlier_removal(cases_daily, num_std=4).add(1.0)
         cases_daily = cases_daily.rolling(lookback, center=False, min_periods=1).mean()
         df_hist_shifted['cases_daily'] = cases_daily.shift(cases_shift)
@@ -489,16 +542,16 @@ def est_all_rts(model_dict):
         df_weights['test_share'] = 1.0
         test_share_shift = int(model_dict['covid_params']['d_incub'] + 2) * -1
 
-        cases_daily_7da = df_hist['cases_daily'].add(1.0)
-        if outlier_removal(cases_daily_7da, num_std=4).dropna().shape[0] / cases_daily_7da.dropna().shape[0] > 0.8:
-            cases_daily_7da = outlier_removal(cases_daily_7da, num_std=4)
+        cases_daily_7da = leading_zeros2nan(df_hist['cases_daily']).add(1.0)
+        # if outlier_removal(cases_daily_7da, num_std=4).dropna().shape[0] / cases_daily_7da.dropna().shape[0] > 0.8:
+        #     cases_daily_7da = outlier_removal(cases_daily_7da, num_std=4)
         # cases_daily_7da = outlier_removal(cases_daily_7da).add(1.0)
         cases_daily_7da = cases_daily_7da.rolling(lookback, center=False, min_periods=1).mean()
 
         pos_neg_tests_7da = model_dict['df_hist']['pos_neg_tests_daily'].add(1.0)
         pos_neg_tests_7da = pos_neg_tests_7da.rolling(lookback, center=False, min_periods=1).mean()
-        if outlier_removal(pos_neg_tests_7da, num_std=4).dropna().shape[0] / pos_neg_tests_7da.dropna().shape[0] > 0.8:
-            pos_neg_tests_7da = outlier_removal(pos_neg_tests_7da)
+        # if outlier_removal(pos_neg_tests_7da, num_std=4).dropna().shape[0] / pos_neg_tests_7da.dropna().shape[0] > 0.8:
+        #     pos_neg_tests_7da = outlier_removal(pos_neg_tests_7da)
         # pos_neg_tests_7da = pos_neg_tests_7da.rolling(lookback, center=False, min_periods=1).mean()
 
         test_share = cases_daily_7da.div(pos_neg_tests_7da)
@@ -517,12 +570,12 @@ def est_all_rts(model_dict):
         df_weights['deaths_daily'] = 2.0
         deaths_shift = int(model_dict['covid_params']['d_incub'] + model_dict['covid_params']['d_til_death']) * -1
 
-        deaths_daily = df_hist['deaths_daily'].add(1.0)
+        deaths_daily = leading_zeros2nan(df_hist['deaths_daily']).add(1.0)
         deaths_daily = deaths_daily.rolling(lookback, center=False, min_periods=1).mean()
-        if outlier_removal(deaths_daily, num_std=4).dropna().shape[0] / deaths_daily.dropna().shape[0] > 0.8:
-            deaths_daily = outlier_removal(deaths_daily, num_std=4)
-        else:
-            print('didnt remove death outliers.')
+        # if outlier_removal(deaths_daily, num_std=4).dropna().shape[0] / deaths_daily.dropna().shape[0] > 0.8:
+        #     deaths_daily = outlier_removal(deaths_daily, num_std=4)
+        # else:
+        #     print('didnt remove death outliers.')
         # deaths_daily = outlier_removal(deaths_daily, num_std=4).add(1.0)
         # deaths_daily = deaths_daily.rolling(lookback, center=False, min_periods=1).mean()
         df_hist_shifted['deaths_daily'] = deaths_daily.shift(deaths_shift)
@@ -539,10 +592,10 @@ def est_all_rts(model_dict):
                                  + model_dict['covid_params']['d_in_hosp'] / 2)
                              * -1)
 
-        hosp_concur = df_hist['hosp_concur'].add(1.0)
+        hosp_concur = leading_zeros2nan(df_hist['hosp_concur']).add(1.0)
         hosp_concur = hosp_concur.rolling(lookback, center=False, min_periods=1).mean()
-        if outlier_removal(hosp_concur, num_std=4).dropna().shape[0] / hosp_concur.dropna().shape[0] > 0.8:
-            hosp_concur = outlier_removal(hosp_concur, num_std=4)
+        # if outlier_removal(hosp_concur, num_std=4).dropna().shape[0] / hosp_concur.dropna().shape[0] > 0.8:
+        #     hosp_concur = outlier_removal(hosp_concur, num_std=4)
         # hosp_concur = outlier_removal(hosp_concur, num_std=4).add(1.0)
         # hosp_concur = hosp_concur.rolling(lookback, center=False, min_periods=1).mean()
         df_hist_shifted['hosp_concur'] = hosp_concur.shift(hosp_concur_shift)
@@ -560,14 +613,14 @@ def est_all_rts(model_dict):
         if 'hosp_concur' in df_hist.columns:
             df_hist.loc[df_hist['hosp_admits'] < df_hist['hosp_concur'].diff(), 'hosp_admits'] = np.nan
 
-        hosp_admits = df_hist['hosp_admits']
+        hosp_admits = leading_zeros2nan(df_hist['hosp_admits'])
         first_hosp_admit = hosp_admits.replace(0, np.nan).dropna().first_valid_index()
         if hosp_admits.loc[first_hosp_admit] > hosp_admits.loc[first_hosp_admit:].quantile(.95):
             first_hosp_admit = first_hosp_admit + pd.Timedelta(days=1)
         hosp_admits = hosp_admits.loc[first_hosp_admit:].reindex(df_hist.index).add(1.0)
         hosp_admits = hosp_admits.rolling(lookback, center=False, min_periods=1).mean()
-        if outlier_removal(hosp_admits, num_std=4).dropna().shape[0] / hosp_admits.dropna().shape[0] > 0.8:
-            hosp_admits = outlier_removal(hosp_admits, num_std=4)
+        # if outlier_removal(hosp_admits, num_std=4).dropna().shape[0] / hosp_admits.dropna().shape[0] > 0.8:
+        #     hosp_admits = outlier_removal(hosp_admits, num_std=4)
         # hosp_admits = outlier_removal(hosp_admits, num_std=4).add(1.0)
         # hosp_admits = hosp_admits.rolling(lookback, center=False, min_periods=1).mean()
         df_hist_shifted['hosp_admits'] = hosp_admits.shift(hosp_admits_shift)
@@ -713,7 +766,7 @@ def est_rt_wconf(lvl_series, lookback, d_infect):
 
     return df_rt
 
-def make_model_dict_state(state_code, abbrev_us_state, df_census, df_st_testing_fmt, df_hhs_hosp, df_can,
+def make_model_dict_state(state_code, abbrev_us_state, df_census, df_st_testing_fmt, df_hhs_hosp, df_can, df_counties, df_vax_hes,
                           covid_params, d_to_forecast = 75, df_mvmt=pd.DataFrame(), df_interventions=pd.DataFrame()):
     model_dict = {}
 
@@ -722,6 +775,9 @@ def make_model_dict_state(state_code, abbrev_us_state, df_census, df_st_testing_
     model_dict['tot_pop'] = df_census.loc[(df_census.SUMLEV == 40)
                                                   & (df_census.state == model_dict['region_code']),
                                                   'pop2019'].values[0]
+    model_dict['tot_pop_18plus'] = df_census.loc[(df_census.SUMLEV == 40)
+                                                  & (df_census.state == model_dict['region_code']),
+                                                  'pop2019_18plus'].values[0]
 
     model_dict['df_hist'] = pd.DataFrame()
 
@@ -796,22 +852,31 @@ def make_model_dict_state(state_code, abbrev_us_state, df_census, df_st_testing_
     else:
         model_dict['df_interventions'] = df_interventions
 
-    model_dict['df_hist']['vax_initiated'] = df_can.loc[model_dict['region_code'], 'actuals.vaccinationsInitiated']
-    model_dict['df_hist']['vax_completed'] = df_can.loc[model_dict['region_code'], 'actuals.vaccinationsCompleted']
+    model_dict['df_hist']['vax_initiated'] = df_can.loc[model_dict['region_code'], 'actuals.vaccinationsInitiated'].replace(0, np.nan)
+    model_dict['df_hist']['vax_completed'] = df_can.loc[model_dict['region_code'], 'actuals.vaccinationsCompleted'].replace(0, np.nan)
     model_dict['df_hist']['vax_halfcompleted'] = model_dict['df_hist']['vax_initiated'] - model_dict['df_hist']['vax_completed']
+
+    model_dict['df_vax_hes'] = df_vax_hes.query(f"state=='{state_code}'")
+    df_vax_hes_state = calc_vax_hes_state(df_vax_hes)
+    model_dict['covid_params']['est_vax_hes_pop_18plus'] = df_vax_hes_state.loc[state_code, 'est_vax_hes_pop_18plus']
+    model_dict['covid_params']['est_vax_hes_strong_pop_18plus'] = df_vax_hes_state.loc[state_code, 'est_vax_hes_strong_pop_18plus']
+    model_dict['df_vax_fore'] = forecast_vaccines(model_dict)
+
+    model_dict['df_counties'] = df_counties.query(f"state=='{state_code}'")[['pop2019', 'cases', 'deaths', 'cases_per100k']]
 
     model_dict['footnote_str'] = ''
     model_dict['chart_title'] = ''
 
     return model_dict
 
-def make_model_dict_us(df_census, df_st_testing_fmt, df_hhs_hosp, df_can, covid_params, d_to_forecast = 75,
+def make_model_dict_us(df_census, df_st_testing_fmt, df_hhs_hosp, df_can, df_counties, df_vax_hes, covid_params, d_to_forecast = 75,
                         df_mvmt=pd.DataFrame(), df_interventions=pd.DataFrame()):
     model_dict = {}
 
     model_dict['region_code'] = 'US'
     model_dict['region_name'] = 'United States'
     model_dict['tot_pop'] = df_census.loc[(df_census.SUMLEV == 40), 'pop2019'].sum()
+    model_dict['tot_pop_18plus'] = df_census.loc[(df_census.SUMLEV == 40), 'pop2019_18plus'].sum()
 
     model_dict['df_hist'] = pd.DataFrame()
 
@@ -839,7 +904,7 @@ def make_model_dict_us(df_census, df_st_testing_fmt, df_hhs_hosp, df_can, covid_
     model_dict['d_to_forecast'] = int(d_to_forecast)
 
     if df_mvmt.shape[0] > 0:
-        model_dict['df_mvmt'] = df_mvmt
+        model_dict['df_mvmt'] = df_mvmt[df_mvmt.state.isnull()].set_index('dt')
     else:
         model_dict['df_mvmt'] = df_mvmt
 
@@ -849,12 +914,46 @@ def make_model_dict_us(df_census, df_st_testing_fmt, df_hhs_hosp, df_can, covid_
     else:
         model_dict['df_interventions'] = df_interventions
 
-    model_dict['df_hist']['vax_initiated'] = df_can['actuals.vaccinationsInitiated'].unstack('state').dropna(thresh=40).sum(axis=1)
-    model_dict['df_hist']['vax_completed'] = df_can['actuals.vaccinationsCompleted'].unstack('state').dropna(thresh=40).sum(axis=1)
+    model_dict['df_hist']['vax_initiated'] = df_can['actuals.vaccinationsInitiated'].unstack('state').replace(0, np.nan).dropna(thresh=40).sum(axis=1)
+    model_dict['df_hist']['vax_completed'] = df_can['actuals.vaccinationsCompleted'].unstack('state').replace(0, np.nan).dropna(thresh=40).sum(axis=1)
     model_dict['df_hist']['vax_halfcompleted'] = model_dict['df_hist']['vax_initiated'] - model_dict['df_hist'][
         'vax_completed']
+
+    model_dict['df_vax_hes'] = df_vax_hes
+    df_vax_hes_state = df_vax_hes.sum()[
+        ['pop2019', 'pop2019_18plus', 'est_vax_hes_pop_18plus', 'est_vax_hes_strong_pop_18plus']]
+    model_dict['covid_params']['est_vax_hes_pop_18plus'] = df_vax_hes_state['est_vax_hes_pop_18plus']
+    model_dict['covid_params']['est_vax_hes_strong_pop_18plus'] = df_vax_hes_state['est_vax_hes_strong_pop_18plus']
+    model_dict['df_vax_fore'] = forecast_vaccines(model_dict)
+
+
+    model_dict['df_counties'] = df_counties[['pop2019', 'cases', 'deaths', 'cases_per100k']]
 
     model_dict['footnote_str'] = ''
     model_dict['chart_title'] = ''
 
     return model_dict
+
+
+def calc_vax_hes_state(df_vax_hes):
+    df_vax_hes_state = df_vax_hes.groupby('state').sum()[['pop2019', 'pop2019_18plus', 'est_vax_hes_pop_18plus', 'est_vax_hes_strong_pop_18plus']]
+    df_vax_hes_state['est_vax_hes'] = df_vax_hes_state['est_vax_hes_pop_18plus'] / df_vax_hes_state['pop2019_18plus']
+    df_vax_hes_state['est_vax_hes_strong'] = df_vax_hes_state['est_vax_hes_strong_pop_18plus'] / df_vax_hes_state['pop2019_18plus']
+    return df_vax_hes_state
+
+def forecast_vaccines(model_dict):
+    df = model_dict['df_hist'][['vax_initiated']].reset_index()
+    df = df.rename(columns={'dt': 'ds', 'vax_initiated': 'y'})
+    df['cap'] = model_dict['tot_pop_18plus'] - model_dict['covid_params']['est_vax_hes_pop_18plus']
+    m = Prophet(growth='logistic', yearly_seasonality=False, weekly_seasonality=False, daily_seasonality=False)
+    m.fit(df)
+    future = m.make_future_dataframe(periods=365*2)
+    future['cap'] = model_dict['tot_pop_18plus'] - model_dict['covid_params']['est_vax_hes_pop_18plus']
+    fcst = m.predict(future)
+    fcst = fcst.set_index('ds')[['trend', 'cap', 'yhat_lower', 'yhat_upper', 'trend_lower', 'trend_upper']]
+    return fcst
+
+def leading_zeros2nan(input_series):
+    first_nonzero_idx = input_series[input_series > 0].first_valid_index()
+    input_series.loc[:first_nonzero_idx] = np.nan
+    return input_series

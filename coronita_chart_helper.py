@@ -586,18 +586,23 @@ def ch_population_share(model_dict):
 
     df_chart = df_agg[['susceptible', 'deaths', 'exposed', 'hospitalized', 'infectious', 'recovered_unvaccinated',
                        'vaccinated_prev_infected', 'vaccinated_never_infected']].dropna(how='all')
-    df_chart = df_chart.rename(columns={'susceptible':'Forecast Susceptible Population',
-                                        'exposed':'Forecast Exposures',
-                                        'infectious':'Forecast Infectious',
-                                        'hospitalized':'Forecast Hospitalizations',
-                                        'recovered_unvaccinated':'Forecast Recoveries, Unvaccinated',
-                                        'vaccinated_prev_infected':'Forecast Recoveries, Vaccinated',
-                                        'vaccinated_never_infected':'Forecast Vaccinated, Never Infected',
-                                        'deaths':'Forecast Deaths'})
+    df_chart = df_chart.rename(columns={'susceptible':'Susceptible Population',
+                                        'exposed':'Exposures',
+                                        'infectious':'Infectious',
+                                        'hospitalized':'Hospitalizations',
+                                        'recovered_unvaccinated':'Recoveries, Unvaccinated',
+                                        'vaccinated_prev_infected':'Vaccinated, Previously Infected',
+                                        'vaccinated_never_infected':'Vaccinated, Never Infected',
+                                        'deaths':'Deaths'})
     df_chart = df_chart.clip(lower=0)
     df_chart = df_chart.iloc[8:]
 
-    ax = df_chart.plot.area(figsize=[14, 8], title=model_dict['region_name']+': Population Overview Forecast\n'+model_dict['chart_title'])
+    ax = df_chart.plot.area(figsize=[14, 8],
+                            title=model_dict['region_name']+': Population Overview Forecast\n'+model_dict['chart_title'],
+                            color=('#a6cee3', '#e31a1c', '#fdbf6f', '#ff7f00', '#6a3d9a', '#1f78b4', '#b2df8a', '#33a02c')
+
+
+                            )
     ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0f}'))
     plt.legend(title='Legend', loc='upper left', bbox_to_anchor=(1.07, 0.95), ncol=1)
     ax2 = ax.twinx()
@@ -875,11 +880,11 @@ def ch_detection_rt(model_dict):
     return ax
 
 def ch_vax_status(model_dict):
-    ax = bar_and_line_chart(bar_series=model_dict['df_hist']['vax_initiated'].dropna(how='all').interpolate(),
+    ax = bar_and_line_chart(bar_series=model_dict['df_hist']['vax_initiated'].dropna(how='all'),
                        bar_name='Vaccinations Initiated', yformat='{:0,.0f}',
                        chart_title='{}: People Vaccinated, by status'.format(model_dict['region_name']),
-                            line_series=model_dict['df_agg'][['vaccinated_prev_infected',
-       'vaccinated_never_infected']].sum(axis=1), line_name='Forecast Vaccinations Completed', line_color='#008fd5',
+                       line_series=model_dict['df_agg'][['vaccinated_prev_infected', 'vaccinated_never_infected']].sum(axis=1),
+                            line_name='Forecast Vaccinations Completed', line_color='#008fd5',
                        bar2_series=model_dict['df_hist']['vax_completed'].dropna(how='all'),
                        bar2_name='Vaccinations Completed',
                        footnote_str=model_dict['footnote_str'],
@@ -887,17 +892,44 @@ def ch_vax_status(model_dict):
                        )
     return ax
 
-def ch_vax_status(model_dict):
-    ax = bar_and_line_chart(bar_series=model_dict['df_hist']['vax_initiated'].dropna(how='all').interpolate(),
-                       bar_name='Vaccinations Initiated', yformat='{:0,.0f}',
-                       chart_title='{}: People Vaccinated, by status'.format(model_dict['region_name']),
-                            line_series=model_dict['df_agg'][['vaccinated_prev_infected',
-       'vaccinated_never_infected']].sum(axis=1), line_name='Forecast Vaccinations Completed', line_color='#008fd5',
-                       bar2_series=model_dict['df_hist']['vax_completed'].dropna(how='all'),
-                       bar2_name='Vaccinations Completed',
+def ch_vax_daily(model_dict):
+    ax = bar_and_line_chart(bar_series=model_dict['df_hist']['vax_initiated'].diff().dropna(how='all'),
+                       bar_name='Daily New Vaccinations Initiated', yformat='{:0,.0f}',
+                       chart_title='{}: New People Vaccinated per Day'.format(model_dict['region_name']),
+                       line_series=model_dict['df_vax_fore']['trend'].diff().loc[
+                                   model_dict['df_agg'].first_valid_index():model_dict['df_agg'].last_valid_index()],
+                            line_name='Forecast Daily New Vaccinations Initiated', line_color='#008fd5',
                        footnote_str=model_dict['footnote_str'],
                        bar_color='#80d4ff', bar2_color='#f3daa5'#, line_color='#008fd5'
                        )
+    return ax
+
+def ch_rt_scen_explanation(model_dict, verbose=False):
+    this_title = model_dict['region_name'] + ': Reproduction Rate Breakdown\n' + model_dict['chart_title']
+
+    ax = model_dict['df_rts']['rt_scenario'].iloc[:-1].plot(
+        label='Effective Rt, Increasing Risk Taking (Used in Forecast)', legend=True,
+        figsize=[14, 8], title=this_title)
+    model_dict['df_rts']['rt_preimmune'].iloc[:-1].plot(ax=ax,
+                                                        label='Hypothetical Pre-Immunity/Behavioral Rt', legend=True)
+
+    if verbose:
+        model_dict['df_rts']['rt_nochange'].iloc[:-1].plot(label='Effective Rt, Current Behavior', legend=True)
+
+    plt.legend(title='Legend', loc='upper left', ncol=1)
+    ax.set_xlabel('')
+
+    plt.annotate(model_dict['footnote_str'],
+                 (0, 0), (0, -80), xycoords='axes fraction', textcoords='offset points', va='top')
+    ax = today_vline(ax)
+    ax = hospcap_vline(ax, model_dict)
+
+    ax.set_ylim(ax.get_ylim()[0], model_dict['df_rts']['rt_preimmune'].max()*1.1)
+
+    ax.text(ax.get_xlim()[0] + 1, model_dict["covid_params"]["basic_r0"]*1.01,
+            f'Pre-Social Distancing $R_0$: {model_dict["covid_params"]["basic_r0"]:.1f}',
+            rotation=0, verticalalignment='bottom', horizontalalignment='left', size='large')
+
     return ax
 
 ### MULTI-REGION CHARTS ###
@@ -1237,7 +1269,7 @@ def calc_trend(series, threshold):
     df = pd.cut(df.stack(), [-np.inf, -1*threshold, threshold, np.inf], labels=['▼','▶','▲'])
     return df.unstack().iloc[-1]
 
-def tab_summary(df_st_testing_fmt, df_fore_allstates, df_census, df_wavg_rt_conf_allregs, df_hhs_hosp, df_can):
+def tab_summary(df_st_testing_fmt, df_fore_allstates, df_census, df_wavg_rt_conf_allregs, df_hhs_hosp, allstate_model_dicts):
     df_tab = df_census[df_census.SUMLEV == 40].copy()
     df_tab = df_tab.set_index('state')
 
@@ -1296,12 +1328,34 @@ def tab_summary(df_st_testing_fmt, df_fore_allstates, df_census, df_wavg_rt_conf
     df_tab['Model Est\'d Active Infections'] = \
         df_fore_allstates[[col for col in df_fore_allstates.columns if col != 'US']] \
             .unstack('dt').loc[['exposed', 'infectious']].T.sum(axis=1) \
-            .unstack(0).loc[pd.Timestamp.today().date()]
+            .unstack(0).loc[pd.Timestamp.today().normalize()]
     df_tab['Model Est\'d Active Infections per 100k'] = df_tab['Model Est\'d Active Infections'].div(df_tab.pop2019).mul(1e5)
     df_tab = df_tab.sort_values(by='Model Est\'d Active Infections per 100k', ascending=False)
     df_tab['Current Reproduction Rate (Rt)'] = df_wavg_rt_conf_allregs.unstack('metric').swaplevel(axis=1)['rt'].fillna(method='ffill').iloc[-1]
     # df_tab['rt'] = df_wavg_rt_conf_allregs.unstack('metric').swaplevel(axis=1)['rt'].fillna(method='ffill').iloc[-1]
     # df_tab['Current Reproduction Rate (Rt)'] = '<span style="color: red">'
+
+    for model_dict in allstate_model_dicts.values():
+        df_tab.loc[model_dict['region_code'], 'Vaccine Hesistant, % of Adults'] = model_dict['covid_params'] \
+                                                                                      ['est_vax_hes_pop_18plus'] / \
+                                                                                  model_dict['tot_pop_18plus']
+        df_tab.loc[model_dict['region_code'], 'Daily Vaccines Initiated'] = model_dict['df_hist']['vax_initiated'] \
+            .diff().rolling(7).mean().fillna(method='ffill').iloc[-1]
+
+        df_tab.loc[model_dict['region_code'], 'Vaccines Initiated, % of Pop.'] = \
+            model_dict['df_hist']['vax_initiated'].fillna(method='ffill') \
+            .iloc[-1] / model_dict['tot_pop']
+
+        df_tab.loc[model_dict['region_code'], 'Vaccine & Acquired Immunity, % of Pop.'] = model_dict['df_agg'][
+            ['recovered', 'vaccinated_never_infected']].sum(axis=1).div(model_dict['tot_pop']).loc[
+            pd.Timestamp.today().normalize()]
+
+        current_r0 = model_dict['covid_params']['voc_transmissibility'] * model_dict['covid_params']['basic_r0']
+        current_r0 = max(min(current_r0, 3.5), 2.0)
+        eff_r0_postimmune = current_r0 * model_dict['df_agg']['susceptible'].div(model_dict['tot_pop'])
+        df_tab.loc[model_dict['region_code'], 'Forecasted Date Herd Immunity Achieved'] = eff_r0_postimmune.mask(
+            eff_r0_postimmune > 0.95).first_valid_index()
+    df_tab = df_tab[df_tab.SUMLEV==40]
 
     df_tab = df_tab.reset_index()
     df_tab['Riskiest State Rank'] = df_tab.index + 1
@@ -1311,12 +1365,23 @@ def tab_summary(df_st_testing_fmt, df_fore_allstates, df_census, df_wavg_rt_conf
     df_tab['State'] = '<a href="/forecasts/' + df_tab.state + '" target="_top">' + df_tab.county + '</a>'
     dict_col_names = {'pop2019': 'Population'}
     df_tab = df_tab.rename(columns=dict_col_names)
+    df_tab_unfmt = df_tab.copy()
 
     ## US Table ##
+    model_dict = allstate_model_dicts['US']
     df_tab_us = pd.DataFrame(df_tab.sum(skipna=False)).T
     df_tab_us['Positivity Rate'] = df_st_testing_fmt['cases'].diff().rolling(14).sum().sum(axis=1).div(
         df_st_testing_fmt['posNeg'].diff().rolling(14).sum().sum(axis=1)).iloc[-1]
     df_tab_us['Current Reproduction Rate (Rt)'] = df_wavg_rt_conf_allregs.unstack('metric').swaplevel(axis=1)['rt'].fillna(method='ffill')['US'].iloc[-1]
+    df_tab_us['Vaccine Hesistant, % of Adults'] = model_dict['covid_params']['est_vax_hes_pop_18plus'] / model_dict['tot_pop_18plus']
+    df_tab_us['Vaccines Initiated, % of Pop.'] = model_dict['df_hist']['vax_initiated'].fillna(method='ffill') \
+            .iloc[-1] / model_dict['tot_pop']
+    df_tab_us['Vaccine & Acquired Immunity, % of Pop.'] = model_dict['df_agg'][
+            ['recovered', 'vaccinated_never_infected']].sum(axis=1).div(model_dict['tot_pop']).loc[
+            pd.Timestamp.today().normalize()]
+    eff_r0_postimmune = model_dict['covid_params']['basic_r0'] * model_dict['df_agg']['susceptible'].div(
+        model_dict['tot_pop'])
+    df_tab_us['Forecasted Date Herd Immunity Achieved'] = df_tab['Forecasted Date Herd Immunity Achieved'].max()
     ##############
 
     format_dict = {
@@ -1338,32 +1403,65 @@ def tab_summary(df_st_testing_fmt, df_fore_allstates, df_census, df_wavg_rt_conf
         '14-Day Avg Daily Deaths': '{0:,.1f}',
         'Hospitalized': '{0:,.0f}',
         '14-Day Avg Daily Hosp Admits': '{0:,.2f}',
-        'Days to Hospital Capacity': '{0:,.0f}'
-                   }
+        'Days to Hospital Capacity': '{0:,.0f}',
+        'Vaccine Hesistant, % of Adults': '{0:,.0%}',
+        'Daily Vaccines Initiated': '{0:,.0f}',
+        'Vaccines Initiated, % of Pop.': '{0:,.0%}',
+        'Vaccine & Acquired Immunity, % of Pop.': '{0:,.0%}'
+               }
+
+    output_cols = ['Riskiest State Rank', 'State', 'Population',
+                   'Model Est\'d Active Infections per 100k', 'Current Reproduction Rate (Rt)',
+                   'Vaccine Hesistant, % of Adults', 'Daily Vaccines Initiated',
+                   'Vaccines Initiated, % of Pop.', 'Vaccine & Acquired Immunity, % of Pop.',
+                   'Forecasted Date Herd Immunity Achieved',
+                   'Days to Hospital Capacity',
+                   'Total Cases per 100k', '14-Day Avg Daily Cases per 100k',
+                   'Positivity Rate',
+                   'Total Deaths per 100k', '14-Day Avg Daily Deaths per 100k',
+                   'Hospitalized per 100k', '14-Day Avg Daily Hosp Admits per 100k'
+                   ]
 
     for key, value in format_dict.items():
         df_tab[key] = df_tab[key].map(value.format)
         df_tab_us[key] = df_tab_us[key].map(value.format)
+    df_tab['Forecasted Date Herd Immunity Achieved'] = \
+        '<span style="color:transparent; font-size:0;">' \
+        + df_tab['Forecasted Date Herd Immunity Achieved'].dt.strftime('%y%m%d') + '</span>' \
+        + df_tab['Forecasted Date Herd Immunity Achieved'].dt.strftime('%B %d, %Y')
+    # df_tab_us['Forecasted Date Herd Immunity Achieved'] = df_tab_us['Forecasted Date Herd Immunity Achieved'].dt.strftime(
+    #     '%B %d, %Y')
+
+    ## Add leading zeros ##
+    leading_zero_cols = ['14-Day Avg Daily Cases per 100k',
+                   'Positivity Rate',
+                   'Vaccine Hesistant, % of Adults', 'Daily Vaccines Initiated',
+                   'Vaccines Initiated, % of Pop.', 'Vaccine & Acquired Immunity, % of Pop.','Hospitalized per 100k'
+                   ]
+    for col in leading_zero_cols:
+        df_tab[col] = '<span style="color:transparent; font-size:0;">' + df_tab[col].str.zfill(10) + '</span>' + \
+                      df_tab[col]
+    ######################
 
     ## Add Trend Arrows ##
-    df_tab['14-Day Avg Daily Deaths per 100k'] = df_tab['14-Day Avg Daily Deaths per 100k'] \
-                                                 + df_tab['deaths_trend'].astype(str)
-    df_tab['14-Day Avg Daily Cases per 100k'] = df_tab['14-Day Avg Daily Cases per 100k'] \
-                                                + df_tab['cases_trend'].astype(str)
-    df_tab['Positivity Rate'] = df_tab['Positivity Rate'] \
-                                + df_tab['positivity_trend'].astype(str)
-    df_tab['Hospitalized per 100k'] = df_tab['Hospitalized per 100k'] \
-                                      + df_tab['hospconcur_trend'].astype(str)
-    df_tab['14-Day Avg Daily Hosp Admits per 100k'] = df_tab['14-Day Avg Daily Hosp Admits per 100k'] \
-                                                      + df_tab['hospadmits_trend'].astype(str)
-    df_tab['14-Day Avg Daily Deaths'] = df_tab['14-Day Avg Daily Deaths'] \
-                                                 + df_tab['deaths_trend'].astype(str)
-    df_tab['14-Day Avg Daily Cases'] = df_tab['14-Day Avg Daily Cases'] \
-                                                + df_tab['cases_trend'].astype(str)
-    df_tab['Hospitalized'] = df_tab['Hospitalized'] \
-                                      + df_tab['hospconcur_trend'].astype(str)
-    df_tab['14-Day Avg Daily Hosp Admits'] = df_tab['14-Day Avg Daily Hosp Admits'] \
-                                                      + df_tab['hospadmits_trend'].astype(str)
+    df_tab['14-Day Avg Daily Deaths per 100k'] = \
+        df_tab['14-Day Avg Daily Deaths per 100k'] + df_tab['deaths_trend'].astype(str)
+    df_tab['14-Day Avg Daily Cases per 100k'] = \
+        df_tab['14-Day Avg Daily Cases per 100k'] + df_tab['cases_trend'].astype(str)
+    df_tab['Positivity Rate'] = \
+        df_tab['Positivity Rate'] + df_tab['positivity_trend'].astype(str)
+    df_tab['Hospitalized per 100k'] = \
+        df_tab['Hospitalized per 100k'] + df_tab['hospconcur_trend'].astype(str)
+    df_tab['14-Day Avg Daily Hosp Admits per 100k'] = \
+        df_tab['14-Day Avg Daily Hosp Admits per 100k'] + df_tab['hospadmits_trend'].astype(str)
+    df_tab['14-Day Avg Daily Deaths'] = \
+        df_tab['14-Day Avg Daily Deaths'] + df_tab['deaths_trend'].astype(str)
+    df_tab['14-Day Avg Daily Cases'] = \
+        df_tab['14-Day Avg Daily Cases'] + df_tab['cases_trend'].astype(str)
+    df_tab['Hospitalized'] = \
+        df_tab['Hospitalized'] + df_tab['hospconcur_trend'].astype(str)
+    df_tab['14-Day Avg Daily Hosp Admits'] = \
+        df_tab['14-Day Avg Daily Hosp Admits']   + df_tab['hospadmits_trend'].astype(str)
     ######################
 
     rt_temp = df_tab['Current Reproduction Rate (Rt)'].copy()
@@ -1390,15 +1488,6 @@ def tab_summary(df_st_testing_fmt, df_fore_allstates, df_census, df_wavg_rt_conf
     df_tab['Days to Hospital Capacity'] = df_tab['Days to Hospital Capacity'].replace(
         'nan', '<span style="color:transparent; font-size:0;">121</span>120+<span style="color: green"> 🟢</span>')
 
-    output_cols = ['Riskiest State Rank', 'State', 'Population',
-                   'Model Est\'d Active Infections per 100k', 'Current Reproduction Rate (Rt)',
-                   'Days to Hospital Capacity',
-                   'Total Cases per 100k', '14-Day Avg Daily Cases per 100k',
-                   'Positivity Rate',
-                   'Total Deaths per 100k', '14-Day Avg Daily Deaths per 100k',
-                   'Hospitalized per 100k', '14-Day Avg Daily Hosp Admits per 100k'
-                   ]
-
     tab_html = df_tab[output_cols].replace('nan','Not Available').replace('nannan','Not Available')
     tab_html = tab_html.to_html(index=False, border=0, justify='center', escape=False)
     tab_html = tab_html.replace('<table', '<table class="w3-table w3-striped w3-hoverable w3-medium sortable"')
@@ -1410,7 +1499,7 @@ def tab_summary(df_st_testing_fmt, df_fore_allstates, df_census, df_wavg_rt_conf
         .replace('▲', '<span style="color: red">▲</span>') \
         .replace('▶', '<span style="color: #ffcc00">▶</span>')
 
-    return tab_html, df_tab, df_tab_us
+    return tab_html, df_tab, df_tab_us, df_tab_unfmt
 
 
 def run_all_charts(model_dict, scenario_name='', pdf_out=False, show_charts=True, pub2web=False):

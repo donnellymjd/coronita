@@ -115,8 +115,8 @@ fig = add_plotly_footnote(fig)
 fig.write_html('../COVIDoutlook/forecasts/plotly/ch_exposure_prob.html', include_plotlyjs='cdn')
 fig.write_image('../COVIDoutlook/assets/images/covid19/ch_exposure_prob.png')
 
-tab_html, df_tab, df_tab_us = tab_summary(df_st_testing_fmt, df_fore_allstates, df_census, df_wavg_rt_conf_allregs,
-                                          df_hhs_hosp, df_can)
+tab_html, df_tab, df_tab_us, df_tab_unfmt = tab_summary(df_st_testing_fmt, df_fore_allstates, df_census, df_wavg_rt_conf_allregs,
+            df_hhs_hosp, allstate_model_dicts)
 text_file = open("../COVIDoutlook/forecasts/plotly/summ_tab.html", "w")
 text_file.write(tab_html)
 text_file.close()
@@ -341,10 +341,11 @@ with io.open('../COVIDoutlook/reproduction.md', mode='w', encoding='utf-8') as f
 
 #### CREATE STATE CHARTS AND MD PAGES ####
 
-l_charts = ['ch_positivetests', 'ch_totaltests', 'ch_postestshare', 'ch_vax_status' 
+l_charts = ['ch_positivetests', 'ch_totaltests', 'ch_postestshare',
             'ch_rt_confid', 'ch_detection_rt',
            'ch_statemap', 'ch_googmvmt',
-           'ch_exposed_infectious', 'ch_hosp_concur','ch_deaths_tot',
+            'ch_vax_status', 'ch_vax_daily', 'ch_rt_scen_explanation',
+            'ch_exposed_infectious', 'ch_hosp_concur','ch_deaths_tot',
            'ch_population_share',
            'ch_cumul_infections', 'ch_daily_exposures', 'ch_hosp_admits', 'ch_daily_deaths'
            ]
@@ -363,7 +364,7 @@ d_chart_fns = {'ch_rt_confid': ch_rt_confid,
  'ch_daily_exposures': ch_daily_exposures,
  'ch_hosp_admits': ch_hosp_admits,
  'ch_daily_deaths': ch_daily_deaths,
-               'ch_vax_status':ch_vax_status}
+               'ch_vax_status':ch_vax_status, 'ch_vax_daily': ch_vax_daily, 'ch_rt_scen_explanation':ch_rt_scen_explanation}
 
 state_plotly_html = '''<div>
     <iframe 
@@ -376,7 +377,7 @@ for state_code in list(df_census.state.unique()) + ['US']:
     model_dict = allstate_model_dicts[state_code]
     model_dict['footnote_str'] = footnote_str_maker()
 
-    fig = ch_statemap_casechange(model_dict, df_counties, counties_geo)
+    fig = ch_statemap_casechange(model_dict, counties_geo)
     fig = add_plotly_footnote(fig)
     fig.write_html('../COVIDoutlook/forecasts/plotly/{}_casepercap_cnty_map.html'.format(
         model_dict['region_code']), include_plotlyjs='cdn')
@@ -394,7 +395,9 @@ for state_code in list(df_census.state.unique()) + ['US']:
 
     statetab_output_cols = ['Riskiest State Rank', 'Population',
                    'Model Est\'d Active Infections', 'Current Reproduction Rate (Rt)',
-                   'Days to Hospital Capacity',
+                   'Vaccine Hesistant, % of Adults', 'Daily Vaccines Initiated',
+                   'Vaccines Initiated, % of Pop.', 'Vaccine & Acquired Immunity, % of Pop.',
+                   'Forecasted Date Herd Immunity Achieved',
                    'Total Cases', '14-Day Avg Daily Cases',
                    'Positivity Rate',
                    'Total Deaths', '14-Day Avg Daily Deaths',
@@ -459,6 +462,8 @@ Our models and charts rely on data from a variety of publicly available datasets
  - [US Census](https://www2.census.gov/programs-surveys/popest/datasets/2010-2019/counties/totals/co-est2019-alldata.csv) - County-level data on populations.
  - [Google Mobility Data](https://www.gstatic.com/covid19/mobility/Global_Mobility_Report.csv) - While currently not used in our models, this data powers our mobility tracking charts.
  - [US Dept of HHS - Hopsital Capacity](https://healthdata.gov/api/3/action/package_show?id=060e4acc-241d-4d19-a929-f5f7b653c648) - After the CDC stopped collecting this data earlier in 2020, the HHS began collecting and hosting data reported by states of currently reported hospital bed capacity.
+ - [COVID ActNow](https://apidocs.covidactnow.org/data-definitions)
+ - [US Census Bureau's Household Pulse Survey - Vaccine Hesitancy](https://data.cdc.gov/stories/s/Vaccine-Hesitancy-for-COVID-19/cnd2-a6zw)
 
 ### Reference Downloads (comma separated values)
  - [COVID-19 Related Policy Actions by State - Source: KFF.org](https://raw.githubusercontent.com/donnellymjd/COVIDoutlook/master/download/df_interventions.csv)

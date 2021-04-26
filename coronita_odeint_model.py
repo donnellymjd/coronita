@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import copy
 
 from covid_data_helper import *
-from coronita_model_helper import *
+# from coronita_model_helper import *
 
 
 def noncohort_ode_model(initial_conditions, t_, r_ts, params):

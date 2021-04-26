@@ -222,7 +222,7 @@ def get_complete_county_data(df_census, df_goog_mob_us):
     df_counties = pd.concat([df_counties.reset_index(), df_notin_nyt], axis=0)
 
     df_counties = pd.merge(
-        df_census.loc[df_census['SUMLEV'] == 50, ['state','county','fips','pop2019']],
+        df_census.loc[df_census['SUMLEV'] == 50, ['state', 'county', 'fips', 'pop2019', 'pop2019_18plus']],
         df_counties.reset_index()[['dt', 'fips', 'cases', 'deaths']],
         on='fips', how='inner')
     df_counties['cases_per100k'] = df_counties['cases'].mul(1e5).div(df_counties['pop2019'])

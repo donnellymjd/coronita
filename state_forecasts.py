@@ -55,10 +55,11 @@ covid_params['d_in_hosp_mild'] = 11.0
 covid_params['icu_rt'] = 13./41.
 covid_params['d_in_icu'] = 13.0
 covid_params['vent_rt'] = 0.4
-covid_params['d_til_death'] =  30.0 #17.0
+covid_params['d_til_death'] = 30.0 #17.0
 covid_params['policy_trigger'] = True
 covid_params['policy_trigger_once'] = True
 days_to_forecast = 150
+covid_params['voc_transmissibility'] = 1.2
 
 #######################
 
@@ -81,12 +82,13 @@ df_wavg_rt_conf_allregs = pd.DataFrame()
 
 for state in df_census.state.unique():
     print(state)
-    
-    model_dict = make_model_dict_state(state, abbrev_us_state, df_census, df_st_testing_fmt, df_hhs_hosp, df_can,
+
+    model_dict = make_model_dict_state(state, abbrev_us_state,
+                                       df_census, df_st_testing_fmt, df_hhs_hosp,
+                                       df_can, df_counties, df_vax_hes,
                                        covid_params, days_to_forecast,
-                                       df_mvmt=df_goog_mob_state
-                                     , df_interventions=df_interventions
-                                      )
+                                       df_mvmt=df_goog_mob_state, df_interventions=df_interventions
+                                       )
 
     this_reg_df_rts = pd.DataFrame(model_dict['df_rts'].stack(), columns=[state])
     this_reg_df_wavg = pd.DataFrame(
@@ -111,7 +113,7 @@ for state in df_census.state.unique():
     print('Peak ICU #: {:.0f}'.format(df_agg.icu.max()))
     print('Peak Ventilator #: {:.0f}'.format(df_agg.vent.max()))
 
-    model_dict['chart_title'] = r'No Change in Future $R_{t}$ Until Reaching Hospital Capacity Triggers Lockdown'
+    model_dict['chart_title'] = r'Complete Mitigation Relaxation by July 4 2021'
 
     allstate_model_dicts[state] = model_dict
     df_fore_allstates = pd.concat([df_fore_allstates,pd.DataFrame(df_agg.stack(), columns=[state])], axis=1)
@@ -121,7 +123,7 @@ for state in df_census.state.unique():
 ### Add US Country Level Entries Before Saving ###
 df_fore_allstates = df_fore_allstates[[state for state in df_fore_allstates.columns if state != 'US']]
 df_fore_us = df_fore_allstates.sum(axis=1, skipna=True).unstack('metric').dropna(how='all')
-tot_pop = df_fore_us[['susceptible', 'deaths', 'exposed', 'hospitalized', 'infectious', 'recovered']].sum(axis=1)
+tot_pop = df_fore_us[['susceptible', 'deaths', 'exposed', 'hospitalized', 'infectious', 'recovered', 'vaccinated_never_infected']].sum(axis=1)
 max_tot_pop = tot_pop.max()
 df_fore_us.loc[tot_pop<max_tot_pop, 'susceptible'] = df_fore_us['susceptible'] + (max_tot_pop - tot_pop)
 
@@ -131,10 +133,12 @@ df_fore_us = df_fore_us.loc[:last_fore_dt]
 df_fore_us_stack = pd.DataFrame(df_fore_us.stack(), columns=['US'])
 df_fore_allstates = pd.concat([df_fore_allstates, df_fore_us_stack], axis=1)
 
-model_dict = make_model_dict_us(df_census, df_st_testing_fmt, df_hhs_hosp, df_can, covid_params, d_to_forecast=75,
-                               df_mvmt=df_goog_mob_us, df_interventions=df_interventions)
+model_dict = make_model_dict_us(df_census, df_st_testing_fmt, df_hhs_hosp,
+                   df_can, df_counties, df_vax_hes,
+                   covid_params, d_to_forecast=150,
+                   df_mvmt=df_goog_mob_us, df_interventions=df_interventions)
 model_dict['df_agg'] = df_fore_us
-model_dict['chart_title'] = r'No Change in Future $R_{t}$ Until Reaching Hospital Capacity Triggers Lockdown'
+model_dict['chart_title'] = r'Complete Mitigation Relaxation by July 4 2021'
 allstate_model_dicts['US'] = model_dict
 
 this_reg_df_wavg = pd.DataFrame(
@@ -159,12 +163,12 @@ df_fore_allstates.unstack('metric').to_csv(
     encoding='utf-8')
 df_fore_allstates.to_pickle('./output/df_fore_allstates_{}.pkl'.format(pd.Timestamp.today().strftime("%Y%m%d")))
 
-asmd_filename = './output/allstate_model_dicts_{}.pkl'.format(pd.Timestamp.today().strftime("%Y%m%d"))
-
 if df_interventions.shape[0] > 0:
     df_interventions.to_csv('../COVIDoutlook/download/df_interventions.csv', encoding='utf-8')
 else:
     print('!!!!!Could not update df_interventions!!!!')
+
+asmd_filename = './output/allstate_model_dicts_{}.pkl'.format(pd.Timestamp.today().strftime("%Y%m%d"))
 
 with open(asmd_filename, 'wb') as handle:
     pickle.dump(allstate_model_dicts, handle, protocol=pickle.HIGHEST_PROTOCOL)
@@ -177,4 +181,4 @@ os.system('say -v "Victoria" "Your forecasts are ready."')
 ######################
 
 os.system('python web_gen_covidoutlook.py &') # 'python web_gen_covidoutlook.py 2>&1 | tee -a web_gen_covidoutlook.log &'
-os.system('python web_gen_personal.py &')
+# os.system('python web_gen_personal.py &')
