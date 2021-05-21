@@ -395,7 +395,7 @@ for state_code in list(df_census.state.unique()) + ['US']:
 
     statetab_output_cols = ['Riskiest State Rank', 'Population',
                    'Model Est\'d Active Infections', 'Current Reproduction Rate (Rt)',
-                   'Vaccine Hesistant, % of Adults', 'Daily Vaccines Initiated',
+                   'Vaccine Hesitant, % of Adults', 'Daily Vaccines Initiated',
                    'Vaccines Initiated, % of Pop.', 'Vaccine & Acquired Immunity, % of Pop.',
                    'Forecasted Date Herd Immunity Achieved',
                    'Total Cases', '14-Day Avg Daily Cases',

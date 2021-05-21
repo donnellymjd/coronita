@@ -43,7 +43,7 @@ def lvl_adj_forecast(s_hist_lvl, s_fore_lvl): #lvl_adj_forecast(model_dict, hist
     # df_agg[fore_lvl_name] = df_agg[fore_lvl_name].fillna(df_agg[fore_lvl_name+'_fitted'])
     # model_dict['df_agg'] = df_agg
     # return model_dict
-
+    s_hist_lvl = s_hist_lvl.rolling(7).mean()
     hist_last_day = s_hist_lvl.last_valid_index()
     fore_diff_future = s_fore_lvl.diff().loc[hist_last_day + pd.Timedelta(days=1):]
     jumping_off_scalar = (s_hist_lvl.loc[hist_last_day] / s_fore_lvl.loc[hist_last_day])
@@ -248,6 +248,7 @@ def seir_model_cohort(start_dt, model_dict, exposed_0=100, infectious_0=100):
 
             current_r0 = model_dict['covid_params']['voc_transmissibility'] * model_dict['covid_params']['basic_r0']
             current_r0 = max(min(current_r0, 3.0), 2.0)
+            model_dict['covid_params']['current_r0'] = current_r0
             # print(f'current_r0 {current_r0}')
             if r_t_preimmune.loc[r_t_preimmune.last_valid_index()] > current_r0:
                 r_t_preimmune.loc['2021-07-04':] = r_t_preimmune.loc[r_t_preimmune.last_valid_index()]
@@ -324,9 +325,6 @@ def seir_model_cohort(start_dt, model_dict, exposed_0=100, infectious_0=100):
         #     new_justvax_recovered = 0
         # idx = pd.IndexSlice
         # df_all_cohorts.loc[idx[:, ['recovered']], cohort_strt] = df_all_cohorts.loc[idx[:, ['recovered']], cohort_strt] + new_justvax_recovered
-
-        df_agg = df_all_cohorts.sum(axis=1).unstack()
-        df_agg.index = pd.DatetimeIndex(df_agg.index).normalize()
 
         next_infectious = df_agg.loc[cohort_strt, 'infectious']
         # next_hospitalized = df_agg.loc[cohort_strt, 'hospitalized']
@@ -900,6 +898,7 @@ def make_model_dict_us(df_census, df_st_testing_fmt, df_hhs_hosp, df_can, df_cou
     model_dict = est_all_rts(model_dict)
     model_dict['df_rts'] = model_dict['df_rts_conf'].unstack().swaplevel(axis=1)['rt']
     model_dict['covid_params']['basic_r0'] = model_dict['df_rts']['weighted_average'].max()
+    model_dict['covid_params']['current_r0'] = min(max(model_dict['covid_params']['basic_r0'] * 1.2, 2.0), 3.0)
 
     model_dict['d_to_forecast'] = int(d_to_forecast)
 

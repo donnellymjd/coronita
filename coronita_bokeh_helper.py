@@ -245,9 +245,11 @@ def bk_rt_confid(model_dict, simplify=True):
 
 def bk_population_share(model_dict):
     df_agg = model_dict['df_agg']
-    col_names = ['susceptible', 'deaths', 'exposed', 'infectious', 'hospitalized', 'recovered']
+    col_names = ['susceptible', 'deaths', 'exposed', 'hospitalized', 'infectious', 'recovered_unvaccinated',
+                 'vaccinated_prev_infected', 'vaccinated_never_infected']
     legend_names = ['Susceptible', 'Deaths', 'Exposed',
-                    'Infectious', 'Hospitalizations', 'Recoveries']
+                    'Infectious', 'Hospitalizations', 'Recoveries, Unvaccinated',
+                    'Vaccinated, Previously Infected', 'Vaccinated, Never Infected']
     df_chart = df_agg[col_names].dropna(how='all')
     df_chart = df_chart.clip(lower=0)
     df_chart = df_chart.iloc[8:].reset_index()
@@ -258,7 +260,7 @@ def bk_population_share(model_dict):
 
     p.varea_stack(col_names,
                   x='dt', source=df_chart,
-                  color=['#008fd5', '#fc4f30', '#e5ae38', '#6d904f', '#8b8b8b', '#810f7c'],
+                  color=('#a6cee3', '#e31a1c', '#fdbf6f', '#ff7f00', '#6a3d9a', '#1f78b4', '#b2df8a', '#33a02c'),
                   legend_label=legend_names,
                   alpha=0.7
                   )
@@ -298,12 +300,15 @@ def bk_population_share(model_dict):
     p.add_tools(HoverTool(
         tooltips=[
             ('Date', '@dt{%F}'),
-            ('Forecast Susceptible Population', '@susceptible{0,0}'),
-            ('Forecast Deaths', '@deaths{0,0}'),
-            ('Forecast Exposures', '@exposed{0,0}'),
-            ('Forecast Infectious Population', '@infectious{0,0}'),
-            ('Forecast Hospitalizations', '@hospitalized{0,0}'),
-            ('Forecast Recoveries', '@recovered{0,0}')
+            ('Susceptible Population', '@susceptible{0,0}'),
+            ('Deaths', '@deaths{0,0}'),
+            ('Exposures', '@exposed{0,0}'),
+            ('Infectious Population', '@infectious{0,0}'),
+            ('Hospitalizations', '@hospitalized{0,0}'),
+            # ('Recoveries', '@recovered{0,0}'),
+            ('Recoveries, Unvaccinated', '@recovered_unvaccinated{0,0}'),
+            ('Vaccinated, Previously Infected', '@vaccinated_prev_infected{0,0}'),
+            ('Vaccinated, Never Infected', '@vaccinated_never_infected{0,0}')
         ],
         formatters={'@dt': 'datetime'},
         mode='vline'

@@ -287,7 +287,8 @@ def ch_hosp(model_dict):
                                         'vent':'Forecast Ventilations',
                                         'deaths':'Forecast Cumulative Deaths'})
 
-    ax = df_chart.plot(figsize=[14, 8], title=model_dict['region_name']+': Hospitalization and Deaths Forecast\n'+model_dict['chart_title'],
+    ax = df_chart.plot(figsize=[14, 8],
+                       title=model_dict['region_name']+': Hospitalization and Deaths Forecast\n'+model_dict['chart_title'],
                        color=['#6d904f', '#8b8b8b', '#810f7c', '#fc4f30'],
                        label=['Forecast Concurrent Hospitalizations',
                               'Forecast ICU Cases',
@@ -1336,7 +1337,7 @@ def tab_summary(df_st_testing_fmt, df_fore_allstates, df_census, df_wavg_rt_conf
     # df_tab['Current Reproduction Rate (Rt)'] = '<span style="color: red">'
 
     for model_dict in allstate_model_dicts.values():
-        df_tab.loc[model_dict['region_code'], 'Vaccine Hesistant, % of Adults'] = model_dict['covid_params'] \
+        df_tab.loc[model_dict['region_code'], 'Vaccine Hesitant, % of Adults'] = model_dict['covid_params'] \
                                                                                       ['est_vax_hes_pop_18plus'] / \
                                                                                   model_dict['tot_pop_18plus']
         df_tab.loc[model_dict['region_code'], 'Daily Vaccines Initiated'] = model_dict['df_hist']['vax_initiated'] \
@@ -1350,11 +1351,9 @@ def tab_summary(df_st_testing_fmt, df_fore_allstates, df_census, df_wavg_rt_conf
             ['recovered', 'vaccinated_never_infected']].sum(axis=1).div(model_dict['tot_pop']).loc[
             pd.Timestamp.today().normalize()]
 
-        current_r0 = model_dict['covid_params']['voc_transmissibility'] * model_dict['covid_params']['basic_r0']
-        current_r0 = max(min(current_r0, 3.5), 2.0)
-        eff_r0_postimmune = current_r0 * model_dict['df_agg']['susceptible'].div(model_dict['tot_pop'])
+        eff_r0_postimmune = model_dict['covid_params']['current_r0'] * model_dict['df_agg']['susceptible'].div(model_dict['tot_pop'])
         df_tab.loc[model_dict['region_code'], 'Forecasted Date Herd Immunity Achieved'] = eff_r0_postimmune.mask(
-            eff_r0_postimmune > 0.95).first_valid_index()
+            eff_r0_postimmune > 0.99).first_valid_index()
     df_tab = df_tab[df_tab.SUMLEV==40]
 
     df_tab = df_tab.reset_index()
@@ -1373,14 +1372,12 @@ def tab_summary(df_st_testing_fmt, df_fore_allstates, df_census, df_wavg_rt_conf
     df_tab_us['Positivity Rate'] = df_st_testing_fmt['cases'].diff().rolling(14).sum().sum(axis=1).div(
         df_st_testing_fmt['posNeg'].diff().rolling(14).sum().sum(axis=1)).iloc[-1]
     df_tab_us['Current Reproduction Rate (Rt)'] = df_wavg_rt_conf_allregs.unstack('metric').swaplevel(axis=1)['rt'].fillna(method='ffill')['US'].iloc[-1]
-    df_tab_us['Vaccine Hesistant, % of Adults'] = model_dict['covid_params']['est_vax_hes_pop_18plus'] / model_dict['tot_pop_18plus']
+    df_tab_us['Vaccine Hesitant, % of Adults'] = model_dict['covid_params']['est_vax_hes_pop_18plus'] / model_dict['tot_pop_18plus']
     df_tab_us['Vaccines Initiated, % of Pop.'] = model_dict['df_hist']['vax_initiated'].fillna(method='ffill') \
             .iloc[-1] / model_dict['tot_pop']
     df_tab_us['Vaccine & Acquired Immunity, % of Pop.'] = model_dict['df_agg'][
             ['recovered', 'vaccinated_never_infected']].sum(axis=1).div(model_dict['tot_pop']).loc[
             pd.Timestamp.today().normalize()]
-    eff_r0_postimmune = model_dict['covid_params']['basic_r0'] * model_dict['df_agg']['susceptible'].div(
-        model_dict['tot_pop'])
     df_tab_us['Forecasted Date Herd Immunity Achieved'] = df_tab['Forecasted Date Herd Immunity Achieved'].max()
     ##############
 
@@ -1404,7 +1401,7 @@ def tab_summary(df_st_testing_fmt, df_fore_allstates, df_census, df_wavg_rt_conf
         'Hospitalized': '{0:,.0f}',
         '14-Day Avg Daily Hosp Admits': '{0:,.2f}',
         'Days to Hospital Capacity': '{0:,.0f}',
-        'Vaccine Hesistant, % of Adults': '{0:,.0%}',
+        'Vaccine Hesitant, % of Adults': '{0:,.0%}',
         'Daily Vaccines Initiated': '{0:,.0f}',
         'Vaccines Initiated, % of Pop.': '{0:,.0%}',
         'Vaccine & Acquired Immunity, % of Pop.': '{0:,.0%}'
@@ -1412,7 +1409,7 @@ def tab_summary(df_st_testing_fmt, df_fore_allstates, df_census, df_wavg_rt_conf
 
     output_cols = ['Riskiest State Rank', 'State', 'Population',
                    'Model Est\'d Active Infections per 100k', 'Current Reproduction Rate (Rt)',
-                   'Vaccine Hesistant, % of Adults', 'Daily Vaccines Initiated',
+                   'Vaccine Hesitant, % of Adults', 'Daily Vaccines Initiated',
                    'Vaccines Initiated, % of Pop.', 'Vaccine & Acquired Immunity, % of Pop.',
                    'Forecasted Date Herd Immunity Achieved',
                    'Days to Hospital Capacity',
@@ -1429,13 +1426,16 @@ def tab_summary(df_st_testing_fmt, df_fore_allstates, df_census, df_wavg_rt_conf
         '<span style="color:transparent; font-size:0;">' \
         + df_tab['Forecasted Date Herd Immunity Achieved'].dt.strftime('%y%m%d') + '</span>' \
         + df_tab['Forecasted Date Herd Immunity Achieved'].dt.strftime('%B %d, %Y')
+    df_tab['Forecasted Date Herd Immunity Achieved'] = df_tab['Forecasted Date Herd Immunity Achieved'].fillna(
+        'Not Achieved. More vaccinations needed.' + '<span style="color: red"> 🟥</span>'
+    )
     # df_tab_us['Forecasted Date Herd Immunity Achieved'] = df_tab_us['Forecasted Date Herd Immunity Achieved'].dt.strftime(
     #     '%B %d, %Y')
 
     ## Add leading zeros ##
     leading_zero_cols = ['14-Day Avg Daily Cases per 100k',
                    'Positivity Rate',
-                   'Vaccine Hesistant, % of Adults', 'Daily Vaccines Initiated',
+                   'Vaccine Hesitant, % of Adults', 'Daily Vaccines Initiated',
                    'Vaccines Initiated, % of Pop.', 'Vaccine & Acquired Immunity, % of Pop.','Hospitalized per 100k'
                    ]
     for col in leading_zero_cols:
