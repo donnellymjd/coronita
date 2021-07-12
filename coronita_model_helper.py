@@ -247,13 +247,22 @@ def seir_model_cohort(start_dt, model_dict, exposed_0=100, infectious_0=100):
             r_t_preimmune.loc[cohort_strt + pd.Timedelta(days=1):] = np.nan
 
             current_r0 = model_dict['covid_params']['voc_transmissibility'] * model_dict['covid_params']['basic_r0']
-            current_r0 = max(min(current_r0, 3.0), 2.0)
+            current_r0 = max(min(current_r0, 4.5), 2.5)
             model_dict['covid_params']['current_r0'] = current_r0
             # print(f'current_r0 {current_r0}')
-            if r_t_preimmune.loc[r_t_preimmune.last_valid_index()] > current_r0:
-                r_t_preimmune.loc['2021-07-04':] = r_t_preimmune.loc[r_t_preimmune.last_valid_index()]
-            else:
-                r_t_preimmune.loc['2021-07-04':] = current_r0
+            # if r_t_preimmune.loc[r_t_preimmune.last_valid_index()] > current_r0:
+            #     r_t_preimmune.loc['2021-07-04':] = r_t_preimmune.loc[r_t_preimmune.last_valid_index()]
+            # else:
+            #     r_t_preimmune.loc['2021-07-04':] = current_r0
+
+            rt_pi_30d_changerate = r_t_preimmune.dropna().iloc[-30:].diff().mean()
+            rt_pi_30d_changerate = max(rt_pi_30d_changerate, 0) # Don't Allow negative trend for now.
+            # r_t_preimmune = r_t_preimmune.diff().fillna(rt_pi_30d_changerate).cumsum().add(r_t_preimmune.iloc[0])
+            rt_pi_diff = r_t_preimmune.diff()
+            rt_pi_diff.iloc[0] = r_t_preimmune.iloc[0]
+            r_t_preimmune = rt_pi_diff.fillna(rt_pi_30d_changerate).cumsum()
+            r_t_preimmune = r_t_preimmune.clip(upper=current_r0)
+
             r_t_preimmune = r_t_preimmune.interpolate()
             r_t_nochange = r_t.copy()
             # if '2021-07-04' in r_t_preimmune.index:

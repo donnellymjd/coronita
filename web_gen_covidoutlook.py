@@ -216,6 +216,10 @@ title: Home - US Overview
 banner: duotone-us.png
 image: https://www.covidoutlook.info/assets/images/covid19/ch_exposure_prob.png
 ---
+<div class="w3-bar w3-yellow">
+  <div class="w3-bar-item w3-hover-gray"><a href="./assets/img/COVIDoutlook%20Release%20on%20Commendations%20from%20NYS%20Governor.pdf">NEWS: COVIDoutlook Founders Receive Commendation from NY Governor</a></div>
+</div>
+
 {{ resources }}
 {{ script }}
 

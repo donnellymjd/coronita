@@ -59,7 +59,7 @@ covid_params['d_til_death'] = 30.0 #17.0
 covid_params['policy_trigger'] = True
 covid_params['policy_trigger_once'] = True
 days_to_forecast = 150
-covid_params['voc_transmissibility'] = 1.2
+covid_params['voc_transmissibility'] = 1.5 #1.2
 
 #######################
 
@@ -113,7 +113,7 @@ for state in df_census.state.unique():
     print('Peak ICU #: {:.0f}'.format(df_agg.icu.max()))
     print('Peak Ventilator #: {:.0f}'.format(df_agg.vent.max()))
 
-    model_dict['chart_title'] = r'Complete Mitigation Relaxation by July 4 2021'
+    model_dict['chart_title'] = r'Trend Mitigation Relaxation until reaching VOC R0'
 
     allstate_model_dicts[state] = model_dict
     df_fore_allstates = pd.concat([df_fore_allstates,pd.DataFrame(df_agg.stack(), columns=[state])], axis=1)

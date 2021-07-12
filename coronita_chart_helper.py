@@ -114,6 +114,8 @@ def param_str_maker(model_dict):
     for x, y in model_dict['covid_params'].items():
         if x[-3:] == '_rt':
             param_dict[x] = (y, '{:.2%}')
+        elif x == 'voc_transmissibility':
+            param_dict[x] = (y-1, '{:.0%}')
         else:
             param_dict[x] = (y, '{:.1f}')
 
@@ -133,10 +135,11 @@ def param_str_maker(model_dict):
                            r'$D_{{in hospital}}: {}$'.format(param_fmtd_dict['d_in_hosp'], ),
                            r'$D_{{til death}}: {}$'.format(param_fmtd_dict['d_til_death'], ),
                            r'$Rate_{{Hospitalization}}: {}$'.format(param_fmtd_dict['hosp_rt'], ) + '%',
-                           r'$Rate_{{ICU}}: {}$'.format(param_fmtd_dict['icu_rt'], ) + '%',
-                           r'$Rate_{{Ventilator}}: {}$'.format(param_fmtd_dict['vent_rt'], ) + '%',
+                           # r'$Rate_{{ICU}}: {}$'.format(param_fmtd_dict['icu_rt'], ) + '%',
+                           # r'$Rate_{{Ventilator}}: {}$'.format(param_fmtd_dict['vent_rt'], ) + '%',
                            r'$Rate_{{Mortality}}: {}$'.format(param_fmtd_dict['mort_rt'], ) + '%',
-                           r'$Basic R_{{0}}: {}$'.format(param_fmtd_dict['basic_r0'], )
+                           r'$Basic R_{{0}}: {}$'.format(param_fmtd_dict['basic_r0'], ),
+                           r'$\% Incr. R_{{0}} from VOCs: {}$'.format(param_fmtd_dict['voc_transmissibility'], ) + '%'
                            ))
     return param_str
 
