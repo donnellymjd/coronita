@@ -241,23 +241,22 @@ def seir_model_cohort(start_dt, model_dict, exposed_0=100, infectious_0=100):
             r_t_preimmune.loc[cohort_strt] = r_t.loc[cohort_strt] / (
                         next_suspop / model_dict['tot_pop']) if next_suspop > 0 else 1.0
 
+        ## Set up for forecast of effective and preimmune Repro Rate ##
         if cohort_strt == last_obs_rt:
+
+            # Avoid divide by zero susceptible population #
             suspop_lastdayofobs = next_suspop if next_suspop > 0 else 1.0
             # r_t_preimmune = r_t.div(suspop_lastdayofobs / model_dict['tot_pop'])
             r_t_preimmune.loc[cohort_strt + pd.Timedelta(days=1):] = np.nan
 
             current_r0 = model_dict['covid_params']['voc_transmissibility'] * model_dict['covid_params']['basic_r0']
             current_r0 = max(min(current_r0, 4.5), 2.5)
+            current_r0 = max(current_r0, r_t_preimmune.max())
             model_dict['covid_params']['current_r0'] = current_r0
             # print(f'current_r0 {current_r0}')
-            # if r_t_preimmune.loc[r_t_preimmune.last_valid_index()] > current_r0:
-            #     r_t_preimmune.loc['2021-07-04':] = r_t_preimmune.loc[r_t_preimmune.last_valid_index()]
-            # else:
-            #     r_t_preimmune.loc['2021-07-04':] = current_r0
 
             rt_pi_30d_changerate = r_t_preimmune.dropna().iloc[-30:].diff().mean()
             rt_pi_30d_changerate = max(rt_pi_30d_changerate, 0) # Don't Allow negative trend for now.
-            # r_t_preimmune = r_t_preimmune.diff().fillna(rt_pi_30d_changerate).cumsum().add(r_t_preimmune.iloc[0])
             rt_pi_diff = r_t_preimmune.diff()
             rt_pi_diff.iloc[0] = r_t_preimmune.iloc[0]
             r_t_preimmune = rt_pi_diff.fillna(rt_pi_30d_changerate).cumsum()
@@ -265,8 +264,7 @@ def seir_model_cohort(start_dt, model_dict, exposed_0=100, infectious_0=100):
 
             r_t_preimmune = r_t_preimmune.interpolate()
             r_t_nochange = r_t.copy()
-            # if '2021-07-04' in r_t_preimmune.index:
-            #     print(r_t_preimmune.loc[cohort_strt], r_t_preimmune.loc['2021-07-04'])
+
             # print(f'{cohort_strt} next_suspop: {next_suspop}')
         elif cohort_strt > last_obs_rt:
             r_t_nochange.loc[cohort_strt] = r_t_nochange.loc[cohort_strt] * (next_suspop / suspop_lastdayofobs)
@@ -844,7 +842,9 @@ def make_model_dict_state(state_code, abbrev_us_state, df_census, df_st_testing_
 
     model_dict = est_all_rts(model_dict)
     model_dict['df_rts'] = model_dict['df_rts_conf'].unstack().swaplevel(axis=1)['rt']
-    model_dict['covid_params']['basic_r0'] = model_dict['df_rts']['weighted_average'].max()
+    basic_r0 = model_dict['df_rts']['weighted_average'].max()
+    basic_r0 = min(max(basic_r0, 1.7), 3.0)
+    model_dict['covid_params']['basic_r0'] = basic_r0
 
     model_dict['d_to_forecast'] = int(d_to_forecast)
 
@@ -906,8 +906,13 @@ def make_model_dict_us(df_census, df_st_testing_fmt, df_hhs_hosp, df_can, df_cou
     # model_dict['df_rts_conf'] = est_all_rts(model_dict)
     model_dict = est_all_rts(model_dict)
     model_dict['df_rts'] = model_dict['df_rts_conf'].unstack().swaplevel(axis=1)['rt']
-    model_dict['covid_params']['basic_r0'] = model_dict['df_rts']['weighted_average'].max()
-    model_dict['covid_params']['current_r0'] = min(max(model_dict['covid_params']['basic_r0'] * 1.2, 2.0), 3.0)
+    basic_r0 = model_dict['df_rts']['weighted_average'].max()
+    basic_r0 = min(max(basic_r0, 1.7), 3.0)
+    model_dict['covid_params']['basic_r0'] = basic_r0
+
+    current_r0 = model_dict['covid_params']['voc_transmissibility'] * model_dict['covid_params']['basic_r0']
+    current_r0 = max(min(current_r0, 4.5), 2.5)
+    model_dict['covid_params']['current_r0'] = current_r0
 
     model_dict['d_to_forecast'] = int(d_to_forecast)
 

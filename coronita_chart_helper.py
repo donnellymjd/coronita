@@ -1357,6 +1357,10 @@ def tab_summary(df_st_testing_fmt, df_fore_allstates, df_census, df_wavg_rt_conf
         eff_r0_postimmune = model_dict['covid_params']['current_r0'] * model_dict['df_agg']['susceptible'].div(model_dict['tot_pop'])
         df_tab.loc[model_dict['region_code'], 'Forecasted Date Herd Immunity Achieved'] = eff_r0_postimmune.mask(
             eff_r0_postimmune > 0.99).first_valid_index()
+
+        df_tab.loc[model_dict['region_code'], 'Hyp. Pre-Immunity Rt'] = model_dict['df_rts'].loc[
+            pd.Timestamp.today().normalize(), 'rt_preimmune']
+
     df_tab = df_tab[df_tab.SUMLEV==40]
 
     df_tab = df_tab.reset_index()
@@ -1375,6 +1379,10 @@ def tab_summary(df_st_testing_fmt, df_fore_allstates, df_census, df_wavg_rt_conf
     df_tab_us['Positivity Rate'] = df_st_testing_fmt['cases'].diff().rolling(14).sum().sum(axis=1).div(
         df_st_testing_fmt['posNeg'].diff().rolling(14).sum().sum(axis=1)).iloc[-1]
     df_tab_us['Current Reproduction Rate (Rt)'] = df_wavg_rt_conf_allregs.unstack('metric').swaplevel(axis=1)['rt'].fillna(method='ffill')['US'].iloc[-1]
+    # df_tab_us['Current Reproduction Rate (Rt)'] = \
+    # df_wavg_rt_conf_allregs.unstack('metric').swaplevel(axis=1)['rt'].fillna(method='ffill')['US'].iloc[-1]
+    df_tab_us['Hyp. Pre-Immunity Rt'] = np.nan
+
     df_tab_us['Vaccine Hesitant, % of Adults'] = model_dict['covid_params']['est_vax_hes_pop_18plus'] / model_dict['tot_pop_18plus']
     df_tab_us['Vaccines Initiated, % of Pop.'] = model_dict['df_hist']['vax_initiated'].fillna(method='ffill') \
             .iloc[-1] / model_dict['tot_pop']
@@ -1389,6 +1397,7 @@ def tab_summary(df_st_testing_fmt, df_fore_allstates, df_census, df_wavg_rt_conf
         'Population': '{0:,.0f}',
         'Model Est\'d Active Infections per 100k': '{0:,.0f}',
         'Current Reproduction Rate (Rt)': '{0:.2f}',
+        'Hyp. Pre-Immunity Rt': '{0:.2f}',
         'Total Cases per 100k': '{0:,.0f}',
         '14-Day Avg Daily Cases per 100k': '{0:,.1f}',
         'Positivity Rate': '{:.1%}',
@@ -1412,6 +1421,7 @@ def tab_summary(df_st_testing_fmt, df_fore_allstates, df_census, df_wavg_rt_conf
 
     output_cols = ['Riskiest State Rank', 'State', 'Population',
                    'Model Est\'d Active Infections per 100k', 'Current Reproduction Rate (Rt)',
+                   'Hyp. Pre-Immunity Rt',
                    'Vaccine Hesitant, % of Adults', 'Daily Vaccines Initiated',
                    'Vaccines Initiated, % of Pop.', 'Vaccine & Acquired Immunity, % of Pop.',
                    'Forecasted Date Herd Immunity Achieved',
