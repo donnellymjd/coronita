@@ -1,0 +1,11 @@
+gh_token.txt
+/output/*
+# nonpub_*
+/venv/
+/data/
+.idea/
+.ipynb_checkpoints/
+/__pycache__/
+.gitignore.swp
+CoronaTrackingCharts.ipynb
+my_can_apikey.py
