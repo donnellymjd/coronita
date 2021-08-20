@@ -1286,6 +1286,7 @@ def tab_summary(df_st_testing_fmt, df_fore_allstates, df_census, df_wavg_rt_conf
                     pd.Timestamp.today() - pd.Timedelta(days=30):]
     df_hosp_cap_rat = df_hosp_concur.div(df_tab.hosp_cap)
     hosp_cap_dates = df_hosp_cap_rat.mask(df_hosp_cap_rat < 1).apply(lambda x: x.first_valid_index())
+    hosp_cap_dates = pd.to_datetime(hosp_cap_dates)
     df_tab['Days to Hospital Capacity'] = (hosp_cap_dates-pd.Timestamp.today()).dt.days
 
     # Deaths
@@ -1340,26 +1341,28 @@ def tab_summary(df_st_testing_fmt, df_fore_allstates, df_census, df_wavg_rt_conf
     # df_tab['Current Reproduction Rate (Rt)'] = '<span style="color: red">'
 
     for model_dict in allstate_model_dicts.values():
-        df_tab.loc[model_dict['region_code'], 'Vaccine Hesitant, % of Adults'] = model_dict['covid_params'] \
-                                                                                      ['est_vax_hes_pop_18plus'] / \
-                                                                                  model_dict['tot_pop_18plus']
-        df_tab.loc[model_dict['region_code'], 'Daily Vaccines Initiated'] = model_dict['df_hist']['vax_initiated'] \
-            .diff().rolling(7).mean().fillna(method='ffill').iloc[-1]
+        if model_dict['region_code'] != 'US':
+            df_tab.loc[model_dict['region_code'], 'Vaccine Hesitant, % of Adults'] = model_dict['covid_params'] \
+                                                                                          ['est_vax_hes_pop_18plus'] / \
+                                                                                      model_dict['tot_pop_18plus']
+            df_tab.loc[model_dict['region_code'], 'Daily Vaccines Initiated'] = model_dict['df_hist']['vax_initiated'] \
+                .diff().rolling(7).mean().fillna(method='ffill').iloc[-1]
 
-        df_tab.loc[model_dict['region_code'], 'Vaccines Initiated, % of Pop.'] = \
-            model_dict['df_hist']['vax_initiated'].fillna(method='ffill') \
-            .iloc[-1] / model_dict['tot_pop']
+            df_tab.loc[model_dict['region_code'], 'Vaccines Initiated, % of Pop.'] = \
+                model_dict['df_hist']['vax_initiated'].fillna(method='ffill') \
+                .iloc[-1] / model_dict['tot_pop']
 
-        df_tab.loc[model_dict['region_code'], 'Vaccine & Acquired Immunity, % of Pop.'] = model_dict['df_agg'][
-            ['recovered', 'vaccinated_never_infected']].sum(axis=1).div(model_dict['tot_pop']).loc[
-            pd.Timestamp.today().normalize()]
+            df_tab.loc[model_dict['region_code'], 'Vaccine & Acquired Immunity, % of Pop.'] = model_dict['df_agg'][
+                ['recovered', 'vaccinated_never_infected']].sum(axis=1).div(model_dict['tot_pop']).loc[
+                pd.Timestamp.today().normalize()]
 
-        eff_r0_postimmune = model_dict['covid_params']['current_r0'] * model_dict['df_agg']['susceptible'].div(model_dict['tot_pop'])
-        df_tab.loc[model_dict['region_code'], 'Forecasted Date Herd Immunity Achieved'] = eff_r0_postimmune.mask(
-            eff_r0_postimmune > 0.99).first_valid_index()
+            eff_r0_postimmune = model_dict['covid_params']['current_r0'] * model_dict['df_agg']['susceptible'].div(model_dict['tot_pop'])
+            df_tab.loc[model_dict['region_code'], 'Forecasted Date Herd Immunity Achieved'] = eff_r0_postimmune.mask(
+                eff_r0_postimmune > 0.99).first_valid_index()
 
-        df_tab.loc[model_dict['region_code'], 'Hyp. Pre-Immunity Rt'] = model_dict['df_rts'].loc[
-            pd.Timestamp.today().normalize(), 'rt_preimmune']
+            # print(model_dict['region_code'])
+            df_tab.loc[model_dict['region_code'], 'Hyp. Pre-Immunity Rt'] = model_dict['df_rts'].loc[
+                pd.Timestamp.today().normalize(), 'rt_preimmune']
 
     df_tab = df_tab[df_tab.SUMLEV==40]
 
@@ -1381,7 +1384,8 @@ def tab_summary(df_st_testing_fmt, df_fore_allstates, df_census, df_wavg_rt_conf
     df_tab_us['Current Reproduction Rate (Rt)'] = df_wavg_rt_conf_allregs.unstack('metric').swaplevel(axis=1)['rt'].fillna(method='ffill')['US'].iloc[-1]
     # df_tab_us['Current Reproduction Rate (Rt)'] = \
     # df_wavg_rt_conf_allregs.unstack('metric').swaplevel(axis=1)['rt'].fillna(method='ffill')['US'].iloc[-1]
-    df_tab_us['Hyp. Pre-Immunity Rt'] = np.nan
+    df_tab_us['Hyp. Pre-Immunity Rt'] = model_dict['df_rts']['weighted_average'].dropna().iloc[-1] / (
+            model_dict['df_agg'].loc[pd.Timestamp.today().normalize(), 'susceptible'] / model_dict['tot_pop'])
 
     df_tab_us['Vaccine Hesitant, % of Adults'] = model_dict['covid_params']['est_vax_hes_pop_18plus'] / model_dict['tot_pop_18plus']
     df_tab_us['Vaccines Initiated, % of Pop.'] = model_dict['df_hist']['vax_initiated'].fillna(method='ffill') \

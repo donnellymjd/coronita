@@ -223,13 +223,13 @@ def seir_model_cohort(start_dt, model_dict, exposed_0=100, infectious_0=100):
                 tot_hosp_capacity = model_dict['tot_pop']/1000 * 2.7
                 covid_hosp_capacity = tot_hosp_capacity * 0.2
 
-            if ( (next_hospitalized > covid_hosp_capacity)
-                    or (model_dict['covid_params']['policy_trigger_once']
-                        and model_dict['df_rts']['policy_triggered'].sum() > 1) ):
-                r_t.loc[cohort_strt] = 0.9
-                model_dict['df_rts'].loc[cohort_strt, 'policy_triggered'] = 1
-                if model_dict['hosp_cap_dt'] == None:
-                    model_dict['hosp_cap_dt'] = cohort_strt
+            # if ( (next_hospitalized > covid_hosp_capacity)
+            #         or (model_dict['covid_params']['policy_trigger_once']
+            #             and model_dict['df_rts']['policy_triggered'].sum() > 1) ):
+            #     r_t.loc[cohort_strt] = 0.9
+            #     model_dict['df_rts'].loc[cohort_strt, 'policy_triggered'] = 1
+            #     if model_dict['hosp_cap_dt'] == None:
+            #         model_dict['hosp_cap_dt'] = cohort_strt
 
         # ACCOUNT FOR EFFECT OF IMMUNITY IN FORECAST PERIOD #
         # Math:
@@ -255,11 +255,11 @@ def seir_model_cohort(start_dt, model_dict, exposed_0=100, infectious_0=100):
             model_dict['covid_params']['current_r0'] = current_r0
             # print(f'current_r0 {current_r0}')
 
-            rt_pi_30d_changerate = r_t_preimmune.dropna().iloc[-30:].diff().mean()
-            rt_pi_30d_changerate = max(rt_pi_30d_changerate, 0) # Don't Allow negative trend for now.
+            rt_pi_14d_changerate = r_t_preimmune.dropna().iloc[-14:].diff().mean()
+            rt_pi_14d_changerate = max(rt_pi_14d_changerate, 0) # Don't Allow negative trend for now.
             rt_pi_diff = r_t_preimmune.diff()
             rt_pi_diff.iloc[0] = r_t_preimmune.iloc[0]
-            r_t_preimmune = rt_pi_diff.fillna(rt_pi_30d_changerate).cumsum()
+            r_t_preimmune = rt_pi_diff.fillna(rt_pi_14d_changerate).cumsum()
             r_t_preimmune = r_t_preimmune.clip(upper=current_r0)
 
             r_t_preimmune = r_t_preimmune.interpolate()

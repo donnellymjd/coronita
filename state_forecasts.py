@@ -139,6 +139,13 @@ model_dict = make_model_dict_us(df_census, df_st_testing_fmt, df_hhs_hosp,
                    covid_params, d_to_forecast=150,
                    df_mvmt=df_goog_mob_us, df_interventions=df_interventions)
 model_dict['df_agg'] = df_fore_us
+
+model_dict['df_rts'] = model_dict['df_rts'].reindex(model_dict['df_agg'].index)
+model_dict['df_rts']['rt_scenario'] = model_dict['df_agg']['exposed_daily'].div(
+    model_dict['df_agg']['infectious'].shift(1)).mul((model_dict['covid_params']['d_infect']))
+model_dict['df_rts']['rt_preimmune'] = model_dict['df_rts']['rt_scenario'].div(
+    model_dict['df_agg']['susceptible'] / model_dict['tot_pop'])
+
 # model_dict['chart_title'] = r'Complete Mitigation Relaxation by July 4 2021'
 model_dict['chart_title'] = r'Trend Mitigation Relaxation until reaching VOC R0'
 allstate_model_dicts['US'] = model_dict
