@@ -9,3 +9,5 @@ gh_token.txt
 .gitignore.swp
 CoronaTrackingCharts.ipynb
 my_can_apikey.py
+
+.DS_Store
